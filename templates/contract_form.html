@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Edit contract' if not is_new else 'New contract' }} · {{ brand.name }}{% endblock %}
+{% block content %}
+<section class="panel narrow wide">
+  <h1>{{ 'Edit employment contract' if not is_new else 'New employment contract' }}</h1>
+  <p class="muted small">Structured per the Lesotho Labour Act. The letterhead (company name + logo) appears when you print or download.</p>
+  <form method="post" class="stack">
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+    {% if is_new %}
+    <label>Employee
+      <select name="employee_id" required autofocus>
+        <option value="">Choose an employee</option>
+        {% for e in employees %}
+        <option value="{{ e['id'] }}" {{ 'selected' if contract.get('employee_id') == e['id'] }}>
+          {{ e['full_name'] }} ({{ e['id'] }}){% if e['job_title'] %} · {{ e['job_title'] }}{% endif %}
+        </option>
+        {% endfor %}
+      </select>
+    </label>
+    {% endif %}
+    <div class="grid">
+      <label>Job title <input name="job_title" value="{{ contract.get('job_title','') }}" required></label>
+      <label>Department <input name="department" value="{{ contract.get('department','') }}"></label>
+    </div>
+    <div class="grid">
+      <label>Monthly salary (M) <input type="number" step="0.01" min="0" name="salary" value="{{ contract.get('salary','') }}" required></label>
+      <label>Annual salary (calculated) <input value="{{ 'M %.2f' % (contract.get('salary','')|float * 12) if contract.get('salary') else '—' }}" readonly></label>
+    </div>
+    <div class="grid">
+      <label>Start date <input type="date" name="start_date" value="{{ contract.get('start_date','') }}" required></label>
+      <label>End date (blank = indefinite) <input type="date" name="end_date" value="{{ contract.get('end_date','') }}"></label>
+    </div>
+    <div class="grid">
+      <label>Probation months (blank = none) <input type="number" min="0" max="12" name="probation_months" value="{{ contract.get('probation_months','') or '' }}"></label>
+      <label>Hours per week <input type="number" min="1" max="80" name="hours_per_week" value="{{ contract.get('hours_per_week', 45) }}"></label>
+    </div>
+    <div class="grid">
+      <label>Annual leave (days) <input type="number" min="12" name="annual_leave_days" value="{{ contract.get('annual_leave_days', 12) }}"></label>
+      <label>Sick leave (days) <input type="number" min="12" name="sick_leave_days" value="{{ contract.get('sick_leave_days', 12) }}"></label>
+      <label>Maternity leave (weeks) <input type="number" min="14" name="maternity_leave_weeks" value="{{ contract.get('maternity_leave_weeks', 14) }}"></label>
+    </div>
+    <p class="muted small">Leave values are set to the Labour Act statutory minimums; they cannot be set lower.</p>
+    <label>Additional terms
+      <textarea name="additional_terms" rows="5" maxlength="4000">{{ contract.get('additional_terms','') }}</textarea>
+    </label>
+    <div class="row">
+      <button class="btn" type="submit">{{ 'Save contract' if not is_new else 'Create contract' }}</button>
+      <a class="btn ghost" href="{{ url_for('admin_contract_view', cid=cid) if not is_new else url_for('admin_contracts') }}">Cancel</a>
+    </div>
+  </form>
+</section>
+{% endblock %}

@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="csrf" content="{{ csrf_token() }}">
+<title>{% block title %}{{ brand.name }}{% endblock %}</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+<link rel="stylesheet" href="{{ url_for('branding_theme') }}">
+{% if brand.has_logo %}<link rel="icon" href="{{ brand.logo_url }}">{% endif %}
+</head>
+<body{% if g.user %} data-signed-in="1" data-last-notif="{{ nav.last_notif }}" data-msgs="{{ nav.messages }}"{% endif %} data-page="{% block page %}{% endblock %}">
+<header class="top">
+  <a class="brand" href="{{ url_for('home') }}">{% if brand.has_logo %}<img src="{{ brand.logo_url }}" alt="">{% endif %}<span>{{ brand.name }}</span></a>
+  {% if g.user %}
+  <nav aria-label="Main">
+    {% if g.user.is_admin %}
+      <a href="{{ url_for('admin_home') }}">Employees</a>
+      <a href="{{ url_for('admin_new') }}">Add employee</a>
+      <a href="{{ url_for('admin_logs') }}">Activity</a>
+      <a href="{{ url_for('admin_branding') }}">Branding</a>
+      <a href="{{ url_for('admin_website') }}">Website</a>
+    {% else %}
+      <a href="{{ url_for('me') }}">My file</a>
+    {% endif %}
+    {% if g.user.is_admin or g.user.level in ('EXE','MGT','ADM') %}
+      <a href="{{ url_for('admin_contracts') }}">Contracts</a>
+    {% endif %}
+    <a href="{{ url_for('workspace') }}">Workspace</a>
+    <a href="{{ url_for('calendar_view') }}">Calendar</a>
+    <a href="{{ url_for('messages') }}">Messages <span class="badge" id="badge-messages" {% if not nav.messages %}hidden{% endif %}>{{ nav.messages }}</span></a>
+    <a href="{{ url_for('notifications') }}">Alerts <span class="badge" id="badge-notifications" {% if not nav.notifications %}hidden{% endif %}>{{ nav.notifications }}</span></a>
+    <a href="{{ url_for('settings') }}">Account</a>
+  </nav>
+  <form method="post" action="{{ url_for('logout') }}" class="who">
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+    <span class="idtag lv-{{ g.user.level }}">{{ g.user.id }}</span>
+    <button class="btn ghost" type="submit">Sign out</button>
+  </form>
+  {% endif %}
+</header>
+<main>
+  {% with msgs = get_flashed_messages(with_categories=true) %}
+    {% for cat, msg in msgs %}<p class="flash {{ cat }}" role="status">{{ msg }}</p>{% endfor %}
+  {% endwith %}
+  {% block content %}{% endblock %}
+</main>
+<script src="{{ url_for('static', filename='app.js') }}" defer></script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

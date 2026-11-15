@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}Gallery · {{ brand.name }}{% endblock %}
+{% block content %}
+<section class="panel">
+  <div class="bar">
+    <h1>Home-page gallery</h1>
+    <a class="btn ghost" href="{{ url_for('admin_website') }}">Back to Website</a>
+  </div>
+  <form method="post" enctype="multipart/form-data" class="stack">
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+    <label>Add photos (up to {{ per_upload }} at a time)
+      <input type="file" name="photos" accept="image/png,image/jpeg,image/webp" multiple>
+    </label>
+    <p class="muted small">Total limit: {{ max_photos }} photos.</p>
+    <button class="btn" type="submit">Upload</button>
+  </form>
+</section>
+
+<section class="panel">
+  <h2>Photos</h2>
+  {% if photos %}
+  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:1rem">
+    {% for p in photos %}
+    <div style="border:1px solid var(--line);border-radius:6px;padding:.6rem;background:#fff">
+      <a href="{{ url_for('photo_file', pid=p['id']) }}" target="_blank">
+        <img src="{{ url_for('photo_file', pid=p['id'], t=1) if p['has_thumb'] else url_for('photo_file', pid=p['id']) }}"
+             alt="" style="width:100%;height:150px;object-fit:cover;border-radius:4px">
+      </a>
+      <form method="post" action="{{ url_for('photo_caption', pid=p['id']) }}" class="stack" style="margin-top:.4rem">
+        <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+        <input name="caption" value="{{ p['caption'] or '' }}" placeholder="Caption (optional)" style="margin:0;padding:.3rem .4rem;font-size:.85rem">
+        <div class="row nowrap" style="gap:.3rem">
+          <button class="btn ghost small" type="submit">Save caption</button>
+        </div>
+      </form>
+      <div class="row nowrap" style="gap:.3rem;margin-top:.3rem">
+        <form method="post" action="{{ url_for('photo_move', pid=p['id']) }}"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="direction" value="up"><button class="btn ghost small" type="submit">↑</button></form>
+        <form method="post" action="{{ url_for('photo_move', pid=p['id']) }}"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="direction" value="down"><button class="btn ghost small" type="submit">↓</button></form>
+        <form method="post" action="{{ url_for('photo_delete', pid=p['id']) }}"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><button class="btn danger small" type="submit">Delete</button></form>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="muted">No photos yet. Upload the first one above.</p>
+  {% endif %}
+</section>
+{% endblock %}

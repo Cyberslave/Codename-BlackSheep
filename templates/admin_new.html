@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Add employee · {{ brand.name }}{% endblock %}
+{% block content %}
+<section class="panel narrow">
+  <h1>Add employee</h1>
+  <p class="muted">The system creates the employee ID, a personal folder and a temporary password.</p>
+  <form method="post" class="stack">
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+    <label>Full name <input name="full_name" value="{{ form.get('full_name','') }}" required autofocus></label>
+    <label>Level
+      <select name="level" required>
+        <option value="">Choose a level</option>
+        {% for code, name in LEVELS.items() %}<option value="{{ code }}" {{ 'selected' if form.get('level') == code }}>{{ name }} ({{ code }})</option>{% endfor %}
+      </select>
+    </label>
+    <label>Job title <input name="job_title" value="{{ form.get('job_title','') }}"></label>
+    <label>Department <input name="department" value="{{ form.get('department','') }}"></label>
+    <label>Email <input type="email" name="email" value="{{ form.get('email','') }}"></label>
+    <label>Phone <input name="phone" value="{{ form.get('phone','') }}"></label>
+    <button class="btn" type="submit">Create employee</button>
+  </form>
+</section>
+{% endblock %}

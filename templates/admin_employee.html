@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block title %}{{ emp['full_name'] }} · {{ brand.name }}{% endblock %}
+{% block content %}
+<section class="panel">
+  <div class="filehead">
+    <span class="idtag lv-{{ emp['level'] }}">{{ emp['id'] }}</span>
+    <h1>{{ emp['full_name'] }}</h1>
+  </div>
+  <p class="muted">{{ LEVEL_NAMES[emp['level']] }} · added {{ emp['created_at']|local }}</p>
+  <form method="post" action="{{ url_for('admin_edit', eid=emp['id']) }}" class="grid">
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+    <label>Full name <input name="full_name" value="{{ emp['full_name'] }}" required></label>
+    <label>Job title <input name="job_title" value="{{ emp['job_title'] or '' }}"></label>
+    <label>Department <input name="department" value="{{ emp['department'] or '' }}"></label>
+    <label>Email <input type="email" name="email" value="{{ emp['email'] or '' }}"></label>
+    <label>Phone <input name="phone" value="{{ emp['phone'] or '' }}"></label>
+    <div class="end"><button class="btn" type="submit">Save details</button></div>
+  </form>
+</section>
+<section class="panel">
+  <h2>Documents</h2>
+  {% set admin = true %}{% set upload_url = url_for('admin_upload', eid=emp['id']) %}
+  {% include "_docs.html" %}
+</section>
+<section class="panel">
+  <h2>Workspace documents</h2>
+  <p class="muted small">Documents and spreadsheets this employee created. You can open them read-only or delete them.</p>
+  <table>
+    <thead><tr><th>Title</th><th>Type</th><th>Last saved</th><th></th></tr></thead>
+    <tbody>
+    {% for d in workdocs %}
+      <tr>
+        <td><a href="{{ url_for('workspace_open', doc_id=d['id']) }}">{{ d['title'] }}</a></td>
+        <td>{{ 'Document' if d['kind'] == 'doc' else 'Spreadsheet' }}</td>
+        <td>{{ d['updated_at']|local }}</td>
+        <td class="actions"><details class="confirm"><summary class="btn danger small">Delete</summary>
+          <form method="post" action="{{ url_for('workspace_delete', doc_id=d['id']) }}"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><p class="small">Delete this document for good?</p><button class="btn danger small" type="submit">Yes, delete</button></form>
+        </details></td>
+      </tr>
+    {% else %}
+      <tr><td colspan="4" class="muted">No workspace documents.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</section>
+<section class="panel">
+  <h2>Sign-in history</h2>
+  {% include "_sessions.html" %}
+  <p><a href="{{ url_for('admin_logs', employee=emp['id']) }}">See full activity for this employee</a></p>
+</section>
+<section class="panel">
+  
+  {% if g.user.is_admin or g.user.level in ('EXE','MGT','ADM') %}
+  <p class="row top-gap">
+    <a class="btn" href="{{ url_for('admin_contract_new') }}?employee_id={{ emp['id'] }}">Create employment contract</a>
+  </p>
+  {% endif %}
+
+<h2>Account</h2>
+  <form method="post" action="{{ url_for('admin_reset', eid=emp['id']) }}" class="row">
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+    <p class="grow">Issue a new temporary password. This also signs the employee out and clears any lock.</p>
+    <button class="btn ghost" type="submit">Reset password</button>
+  </form>
+  <form method="post" action="{{ url_for('admin_remove', eid=emp['id']) }}" class="danger-zone stack">
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+    <h3>Remove employee</h3>
+    <p>This deletes the account and signs the employee out. Their folder is moved to the archive, not erased.</p>
+    <label>Type <span class="mono">{{ emp['id'] }}</span> to confirm
+      <input name="confirm" class="mono" autocomplete="off" required>
+    </label>
+    <button class="btn danger" type="submit">Remove {{ emp['full_name'] }}</button>
+  </form>
+</section>
+{% endblock %}

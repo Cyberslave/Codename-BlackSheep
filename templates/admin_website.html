@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}Website · {{ brand.name }}{% endblock %}
+{% block content %}
+<section class="panel narrow wide">
+  <h1>Website</h1>
+  <p class="muted">Change the colours of the site and manage the home-page gallery.</p>
+
+  <h2>Site colours</h2>
+  <form method="post" class="stack">
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+    <input type="hidden" name="action" value="save_colours">
+    <label>Page background <input type="color" name="body_color" value="{{ theme.body_color }}"></label>
+    <label>Navigation bar <input type="color" name="navbar_color" value="{{ theme.navbar_color }}"></label>
+    <label>Navigation text <input type="color" name="navbar_text_color" value="{{ theme.navbar_text_color }}"></label>
+    <p class="muted small">Pick readable combinations — dark text on a light bar, or white text on a dark bar. Leave the defaults to undo.</p>
+
+    <h3 style="margin-top:1.25rem">Buttons</h3>
+    <label class="check">
+      <input type="checkbox" name="button_follow_navbar" value="1" id="btn-follow"
+             {{ 'checked' if theme.button_follow_navbar == '1' }}>
+      Use the navigation bar colour for buttons (recommended)
+    </label>
+
+    <div id="btn-overrides" style="{{ 'display:none' if theme.button_follow_navbar == '1' }}">
+      <div class="grid">
+        <label>Button colour <input type="color" name="button_color" value="{{ theme.button_color or theme.navbar_color }}"></label>
+        <label>Button text <input type="color" name="button_text_color" value="{{ theme.button_text_color or theme.navbar_text_color }}"></label>
+      </div>
+      <p class="muted small">Only used when "Use the navigation bar colour" is unticked.</p>
+    </div>
+
+    <button class="btn" type="submit">Save colours</button>
+  </form>
+
+  <script src="{{ url_for('static', filename='site-colours.js') }}" defer></script>
+
+  <h2 style="margin-top:2rem">Home-page gallery</h2>
+  <p class="muted small">Photos uploaded here appear on the public <a href="{{ url_for('public_gallery') }}">gallery page</a>. Up to 40 photos, JPG/PNG/WebP, 10 MB each.{% if not have_pil %} (Install Pillow for automatic resizing and EXIF stripping.){% endif %}</p>
+  <p><a class="btn" href="{{ url_for('admin_gallery') }}">Manage gallery ({{ photos_count }} photo{{ 's' if photos_count != 1 else '' }})</a></p>
+</section>
+{% endblock %}

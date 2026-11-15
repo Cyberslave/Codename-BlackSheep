@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Employees · {{ brand.name }}{% endblock %}
+{% block content %}
+<section class="stats">
+  <div><strong>{{ stats.total }}</strong><span>Employees</span></div>
+  <div><strong>{{ stats.online }}</strong><span>Signed in now</span></div>
+  <div><strong>{{ stats.today }}</strong><span>Sign-ins today</span></div>
+</section>
+<section class="panel">
+  <div class="bar">
+    <h1>Employees</h1>
+    <a class="btn" href="{{ url_for('admin_new') }}">Add employee</a>
+  </div>
+  <form method="get" class="row filter">
+    <label>Search <input name="q" value="{{ q }}" placeholder="Name, ID, department or title"></label>
+    <label>Level
+      <select name="level">
+        <option value="">All levels</option>
+        {% for code, name in LEVELS.items() %}<option value="{{ code }}" {{ 'selected' if level == code }}>{{ name }}</option>{% endfor %}
+      </select>
+    </label>
+    <button class="btn ghost" type="submit">Filter</button>
+  </form>
+  <div class="scroll">
+  <table>
+    <thead><tr><th>Employee ID</th><th>Name</th><th>Role</th><th>Level</th><th>Last sign-in</th><th></th></tr></thead>
+    <tbody>
+    {% for e in employees %}
+      <tr>
+        <td><span class="idtag lv-{{ e['level'] }}">{{ e['id'] }}</span></td>
+        <td><a href="{{ url_for('admin_employee', eid=e['id']) }}">{{ e['full_name'] }}</a></td>
+        <td>{{ e['job_title'] or '—' }}{% if e['department'] %}<br><span class="muted small">{{ e['department'] }}</span>{% endif %}</td>
+        <td>{{ LEVEL_NAMES[e['level']] }}</td>
+        <td>{{ e['last_login']|local }}</td>
+        <td>{% if e['online'] %}<span class="dot on">Signed in</span>{% endif %}</td>
+      </tr>
+    {% else %}
+      <tr><td colspan="6" class="muted">{% if q or level %}No employees match this filter.{% else %}No employees yet. Add the first one to create their ID and folder.{% endif %}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</section>
+{% endblock %}

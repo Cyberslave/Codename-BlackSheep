@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}{{ doc['title'] }} · {{ brand.name }}{% endblock %}
+{% block page %}editor{% endblock %}
+{% block content %}
+<section class="panel docbar">
+  <div class="bar">
+    <input id="title" class="titlefield" value="{{ doc['title'] }}" maxlength="120" aria-label="Document title" {{ 'readonly' if readonly }}>
+    <div class="row nowrap">
+      <span id="status" class="small muted" role="status">{{ 'View only' if readonly else 'Saved' }}</span>
+      {% if not readonly %}<button class="btn" id="save" type="button">Save</button>{% endif %}
+      <button class="btn ghost" id="print" type="button">Print / PDF</button>
+      <a class="btn ghost" id="export" href="{{ url_for('workspace_export_docx', doc_id=doc['id']) }}">Download Word</a>
+      {% if access == 'owner' %}<a class="btn ghost" href="{{ url_for('workspace_share', doc_id=doc['id']) }}">Share</a>{% endif %}
+      <a class="btn ghost" href="{{ url_for('workspace') }}">Close</a>
+    </div>
+  </div>
+  {% if access != 'owner' %}<p class="muted small">Owned by {{ owner['full_name'] if owner else 'a former employee' }} · you have {{ 'edit' if access == 'edit' else 'view-only' }} access.</p>{% endif %}
+</section>
+{% if not readonly %}
+<div class="toolbar" role="toolbar" aria-label="Formatting">
+  <button type="button" data-cmd="bold" title="Bold (Ctrl+B)"><b>B</b></button>
+  <button type="button" data-cmd="italic" title="Italic (Ctrl+I)"><i>I</i></button>
+  <button type="button" data-cmd="underline" title="Underline (Ctrl+U)"><u>U</u></button>
+  <button type="button" data-cmd="strikeThrough" title="Strikethrough"><s>S</s></button>
+  <span class="sep"></span>
+  <button type="button" data-cmd="h1" title="Heading 1">H1</button>
+  <button type="button" data-cmd="h2" title="Heading 2">H2</button>
+  <button type="button" data-cmd="p" title="Normal text">Text</button>
+  <button type="button" data-cmd="quote" title="Quote">Quote</button>
+  <span class="sep"></span>
+  <button type="button" data-cmd="insertUnorderedList" title="Bullet list">• List</button>
+  <button type="button" data-cmd="insertOrderedList" title="Numbered list">1. List</button>
+  <span class="sep"></span>
+  <button type="button" data-cmd="left" title="Align left">Left</button>
+  <button type="button" data-cmd="center" title="Centre">Centre</button>
+  <button type="button" data-cmd="right" title="Align right">Right</button>
+  <span class="sep"></span>
+  <button type="button" data-cmd="link" title="Insert link">Link</button>
+  <button type="button" data-cmd="table" title="Insert table">Table</button>
+  <button type="button" data-cmd="insertHorizontalRule" title="Divider line">Line</button>
+  <button type="button" data-cmd="removeFormat" title="Clear formatting">Clear</button>
+  <span class="sep"></span>
+  <button type="button" data-cmd="undo" title="Undo (Ctrl+Z)">Undo</button>
+  <button type="button" data-cmd="redo" title="Redo (Ctrl+Y)">Redo</button>
+  <span class="small muted words" id="words"></span>
+</div>
+{% endif %}
+<div class="print-brand">{% if brand.has_logo %}<img src="{{ brand.logo_url }}" alt="">{% endif %}<span>{{ brand.name }}</span></div>
+<article id="editor" class="paper" data-id="{{ doc['id'] }}" data-version="{{ doc['version'] }}" data-edit="{{ 0 if readonly else 1 }}" {% if not readonly %}contenteditable="true" spellcheck="true"{% endif %}>{{ content|safe }}</article>
+{% endblock %}
+{% block scripts %}
+<script src="{{ url_for('static', filename='workspace.js') }}" defer></script>
+<script src="{{ url_for('static', filename='editor.js') }}" defer></script>
+{% endblock %}

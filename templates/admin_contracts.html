@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Contracts · {{ brand.name }}{% endblock %}
+{% block content %}
+<section class="panel">
+  <div class="bar">
+    <h1>Employment contracts</h1>
+    <a class="btn" href="{{ url_for('admin_contract_new') }}">New contract</a>
+  </div>
+  <p class="muted small">Contracts can be created by administrators, executives and managers.</p>
+  <div class="scroll">
+  <table>
+    <thead><tr><th>Employee</th><th>Job title</th><th>Salary (M)</th><th>Start</th><th>Probation</th><th></th></tr></thead>
+    <tbody>
+    {% for c in contracts %}
+      <tr>
+        <td><a href="{{ url_for('admin_contract_view', cid=c['id']) }}">{{ c['emp_name'] or c['employee_id'] }}</a></td>
+        <td>{{ c['job_title'] }}</td>
+        <td>{{ '%.2f' % (c['salary_cents'] / 100) }}</td>
+        <td>{{ c['start_date'] }}</td>
+        <td>{{ c['probation_months'] ~ ' months' if c['probation_months'] else '—' }}</td>
+        <td><a class="btn ghost small" href="{{ url_for('admin_contract_edit', cid=c['id']) }}">Edit</a></td>
+      </tr>
+    {% else %}
+      <tr><td colspan="6" class="muted">No contracts yet.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</section>
+{% endblock %}

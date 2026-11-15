@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}My file · {{ brand.name }}{% endblock %}
+{% block content %}
+<section class="panel">
+  <div class="filehead">
+    <span class="idtag lv-{{ g.user.level }}">{{ g.user.id }}</span>
+    <h1>{{ g.user.full_name }}</h1>
+  </div>
+  <p class="muted">{{ LEVEL_NAMES[g.user.level] }}{% if g.user.job_title %} · {{ g.user.job_title }}{% endif %}{% if g.user.department %} · {{ g.user.department }}{% endif %}</p>
+</section>
+<section class="panel">
+  <h2>My documents</h2>
+  {% set admin = false %}{% set upload_url = url_for('me_upload') %}
+  {% include "_docs.html" %}
+</section>
+<section class="panel">
+  <h2>My recent sign-ins</h2>
+  {% include "_sessions.html" %}
+</section>
+{% endblock %}

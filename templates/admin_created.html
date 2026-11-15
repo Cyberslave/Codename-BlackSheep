@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Password reset' if reset else 'Employee added' }} · {{ brand.name }}{% endblock %}
+{% block content %}
+<section class="panel narrow">
+  <h1>{{ 'Password reset' if reset else 'Employee added' }}</h1>
+  <p>Give these sign-in details to {{ emp['full_name'] }}. The password is shown only once, and they must replace it at first sign-in.</p>
+  <dl class="creds">
+    <dt>Employee ID</dt><dd class="mono">{{ emp['id'] }}</dd>
+    <dt>Temporary password</dt><dd class="mono">{{ password }}</dd>
+  </dl>
+  <p class="row">
+    <a class="btn" href="{{ url_for('admin_employee', eid=emp['id']) }}">Open employee file</a>
+    <a class="btn ghost" href="{{ url_for('admin_new') }}">Add another employee</a>
+  </p>
+</section>
+{% endblock %}
