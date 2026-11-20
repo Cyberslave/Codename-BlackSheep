@@ -15,6 +15,7 @@ from flask import abort, flash, g, redirect, render_template, request, url_for
 import exporters
 from app import LEVEL_NAMES, LEVELS, admin_required, app, audit, get_db, get_emp, iso, now
 from features import attachment, get_brand
+from letterhead import letterhead_html
 
 # Lesotho Labour Act statutory minimums (as at 2024/2026)
 STAT_ANNUAL_LEAVE_DAYS = 12
