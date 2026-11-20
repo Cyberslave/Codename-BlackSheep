@@ -189,12 +189,10 @@ def _contract_html(contract, employee, brand):
                 f"{'s' if contract['probation_months'] != 1 else ''} of employment "
                 "shall be a probationary period, during which either party may terminate "
                 "on the notice provided by the Labour Code.")
-    logo_block = ""  # text-only letterhead; the page header shows the logo
+        from letterhead import letterhead_html
     parts = [
-        '<div class="lease-head">'
-        '<div class="lease-head-text"><strong>' + landlord + '</strong>'
-        '<span>Employment Contract</span></div></div>',
-        "<h1>Contract of Employment</h1>",
+        letterhead_html(brand, "Employment Contract"),
+        "<h1>Contract of Employment</h1>",,
         "<p>Prepared for " + landlord + " on " + now().date().strftime("%d %B %Y") + ".</p>",
         "<h2>1. Parties</h2>",
         "<p><b>Employer:</b> " + landlord + "</p>",
