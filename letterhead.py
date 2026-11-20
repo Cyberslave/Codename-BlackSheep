@@ -69,7 +69,7 @@ def letterhead_html(brand, subtitle):
                 f'<img src="data:{mime};base64,{b64}" alt="" '
                 'style="max-height:70px;max-width:220px;display:block;margin-bottom:10px">'
             )
-     return (
+return (
         '<div class="doc-letterhead" '
         'style="border-bottom:2px solid #000;padding-bottom:12px;margin-bottom:22px">'
         + logo_html +
