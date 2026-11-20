@@ -25,6 +25,10 @@
     {% endif %}
     {% if g.user.is_admin or g.user.level in ('EXE','MGT','ADM') %}
       <a href="{{ url_for('admin_contracts') }}">Contracts</a>
+      <a href="{{ url_for('admin_business') }}">Business</a>
+      <a href="{{ url_for('admin_sales') }}">Sales</a>
+      <a href="{{ url_for('admin_expenses') }}">Expenses</a>
+      <a href="{{ url_for('admin_administrators') }}">Administrators</a>
       <a href="{{ url_for('admin_administrators') }}">Administrators</a>
       <a href="{{ url_for('admin_expenses') }}">Expenses</a>
       <a href="{{ url_for('admin_sales') }}">Sales</a>
