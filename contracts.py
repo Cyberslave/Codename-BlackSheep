@@ -192,7 +192,7 @@ def _contract_html(contract, employee, brand):
         from letterhead import letterhead_html
     parts = [
         letterhead_html(brand, "Employment Contract"),
-        "<h1>Contract of Employment</h1>",,
+        "<h1>Contract of Employment</h1>",
         "<p>Prepared for " + landlord + " on " + now().date().strftime("%d %B %Y") + ".</p>",
         "<h2>1. Parties</h2>",
         "<p><b>Employer:</b> " + landlord + "</p>",
