@@ -735,3 +735,4 @@ def create_admin(name, password):
 import features  # noqa: E402,F401
 import website   # noqa: E402,F401  (site colours + gallery)
 import contracts  # noqa: E402,F401  (employment contracts)
+import business # noqa: E402,F401 (sales, expenses, admins, letterheaded docs)
