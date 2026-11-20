@@ -190,7 +190,7 @@ def _contract_html(contract, employee, brand):
                 f"{'s' if contract['probation_months'] != 1 else ''} of employment "
                 "shall be a probationary period, during which either party may terminate "
                 "on the notice provided by the Labour Code.")
-        from letterhead import letterhead_html
+        
     parts = [
         letterhead_html(brand, "Employment Contract"),
         "<h1>Contract of Employment</h1>",
