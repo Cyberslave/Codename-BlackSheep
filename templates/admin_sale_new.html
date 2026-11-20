@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}New sale · {{ brand.name }}{% endblock %}
+{% block content %}
+<section class="panel">
+  <h1>New sale</h1>
+  <form method="post" class="stack">
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+    <div class="grid">
+      <label>Customer
+        <select name="customer_id" required>
+          <option value="">Choose a customer</option>
+          {% for c in customers %}
+          <option value="{{ c['id'] }}">{{ c['name'] }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>Sale date <input type="date" name="sale_date" value="{{ today }}" required></label>
+      <label>Due date <input type="date" name="due_date"></label>
+      <label>Tax rate (%) <input name="tax_rate" type="number" step="0.01" min="0" max="100" value="0"></label>
+    </div>
+
+    <h2>Items</h2>
+    <table id="items" style="width:100%;border-collapse:collapse">
+      <thead><tr>
+        <th style="text-align:left">Description</th>
+        <th>Qty</th><th>Unit price</th><th>Line total</th><th></th>
+      </tr></thead>
+      <tbody></tbody>
+    </table>
+    <p><button class="btn ghost small" type="button" onclick="addRow()">+ Add item</button></p>
+
+    <label>Notes <textarea name="notes" rows="2"></textarea></label>
+    <button class="btn" type="submit">Save sale</button>
+  </form>
+</section>
+<script>
+(function () {
+  var tb = document.querySelector('#items tbody');
+  function recalc(row) {
+    var q = parseFloat(row.querySelector('[name="item_qty[]"]').value || '0') || 0;
+    var p = parseFloat(row.querySelector('[name="item_price[]"]').value || '0') || 0;
+    row.querySelector('.line-total').textContent = (q * p).toFixed(2);
+  }
+  function addRow() {
+    var tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td><input name="item_desc[]" placeholder="Description" style="width:100%"></td>' +
+      '<td><input name="item_qty[]" type="number" step="0.01" min="0" value="1" style="width:80px"></td>' +
+      '<td><input name="item_price[]" type="number" step="0.01" min="0" value="0" style="width:110px"></td>' +
+      '<td class="line-total" style="text-align:right">0.00</td>' +
+      '<td><button class="btn ghost small" type="button" onclick="this.closest(\'tr\').remove()">×</button></td>';
+    tb.appendChild(tr);
+    tr.querySelectorAll('input').forEach(function (i) {
+      i.addEventListener('input', function () { recalc(tr); });
+    });
+  }
+  window.addRow = addRow;
+  addRow();
+})();
+</script>
+{% endblock %}

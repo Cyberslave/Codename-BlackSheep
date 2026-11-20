@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}New customer · {{ brand.name }}{% endblock %}
+{% block content %}
+<section class="panel narrow">
+  <h1>New customer</h1>
+  <form method="post" class="stack">
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+    <label>Name <input name="name" required autofocus></label>
+    <label>Email <input type="email" name="email"></label>
+    <label>Phone <input name="phone"></label>
+    <label>Address <textarea name="address" rows="2"></textarea></label>
+    <label>Tax number <input name="tax_number"></label>
+    <label>Notes <textarea name="notes" rows="2"></textarea></label>
+    <button class="btn" type="submit">Add customer</button>
+  </form>
+</section>
+{% endblock %}

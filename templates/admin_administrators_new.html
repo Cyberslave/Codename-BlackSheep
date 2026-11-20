@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Add administrator · {{ brand.name }}{% endblock %}
+{% block content %}
+<section class="panel narrow">
+  <h1>Add administrator</h1>
+  <form method="post" class="stack">
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+    <label>Full name <input name="full_name" required autofocus></label>
+    <label>Level
+      <select name="level">
+        {% for code, label in levels.items() if code in admin_levels %}
+        <option value="{{ code }}">{{ label }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Email <input type="email" name="email"></label>
+    <label>Phone <input name="phone"></label>
+    <p class="muted small">A password will be generated and shown once.</p>
+    <button class="btn" type="submit">Create administrator</button>
+  </form>
+</section>
+{% endblock %}

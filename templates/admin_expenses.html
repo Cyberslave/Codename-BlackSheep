@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}Expenses · {{ brand.name }}{% endblock %}
+{% block content %}
+<section class="panel">
+  <div class="bar"><h1>Expenses</h1>
+    <div class="row nowrap">
+      <a class="btn ghost" href="{{ url_for('admin_business') }}">Business</a>
+      <a class="btn" href="{{ url_for('admin_expense_new') }}">New expense</a>
+    </div>
+  </div>
+  <form method="get" class="row">
+    <select name="status">
+      <option value="">All statuses</option>
+      {% for s in ['pending','approved','rejected'] %}
+      <option value="{{ s }}" {{ 'selected' if status == s }}>{{ s }}</option>
+      {% endfor %}
+    </select>
+    <button class="btn ghost">Filter</button>
+  </form>
+  {% if expenses %}
+  <table style="width:100%;border-collapse:collapse">
+    <tr><th style="text-align:left">Date</th><th>Category</th><th>Description</th><th style="text-align:right">Amount</th><th>Status</th><th></th></tr>
+    {% for e in expenses %}
+    <tr>
+      <td>{{ e['expense_date'] }}</td>
+      <td>{{ e['category_name'] }}</td>
+      <td>{{ e['description'] }}</td>
+      <td style="text-align:right">{{ e['amount_cents']|money }}</td>
+      <td>{{ e['status'] }}</td>
+      <td>
+        <a class="btn ghost small" href="{{ url_for('admin_expense_sheet', eid=e['id']) }}" target="_blank">Sheet</a>
+        {% if e['status'] == 'pending' and (g.user['is_admin'] or g.user['level'] in ('EXE','MGT')) %}
+        <form method="post" action="{{ url_for('admin_expense_approve', eid=e['id']) }}" style="display:inline">
+          <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+          <button class="btn small">Approve</button>
+        </form>
+        <form method="post" action="{{ url_for('admin_expense_reject', eid=e['id']) }}" style="display:inline">
+          <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+          <input name="reason" placeholder="Reason" required style="width:100px">
+          <button class="btn ghost small">Reject</button>
+        </form>
+        {% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% else %}<p class="muted">No expenses yet.</p>{% endif %}
+</section>
+{% endblock %}

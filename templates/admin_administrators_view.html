@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}{{ emp['full_name'] }} · {{ brand.name }}{% endblock %}
+{% block content %}
+<section class="panel narrow">
+  <div class="bar">
+    <h1>{{ emp['full_name'] }}</h1>
+    <a class="btn ghost" href="{{ url_for('admin_administrators') }}">Back</a>
+  </div>
+  <form method="post" action="{{ url_for('admin_administrators_edit', eid=emp['id']) }}" class="stack">
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+    <p><b>ID:</b> {{ emp['id'] }}</p>
+    <label>Full name <input name="full_name" value="{{ emp['full_name'] }}" required></label>
+    <label>Level
+      <select name="level">
+        {% for code, label in levels.items() if code in admin_levels %}
+        <option value="{{ code }}" {{ 'selected' if emp['level'] == code }}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Email <input type="email" name="email" value="{{ emp['email'] or '' }}"></label>
+    <label>Phone <input name="phone" value="{{ emp['phone'] or '' }}"></label>
+    <button class="btn" type="submit">Save changes</button>
+  </form>
+
+  <h2 style="margin-top:2rem">Demote to staff</h2>
+  <form method="post" action="{{ url_for('admin_administrators_demote', eid=emp['id']) }}">
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+    <p class="muted small">Removes administrator privileges. Cannot be undone from here.</p>
+    <button class="btn danger" type="submit">Demote</button>
+  </form>
+</section>
+{% endblock %}

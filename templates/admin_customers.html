@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}Customers · {{ brand.name }}{% endblock %}
+{% block content %}
+<section class="panel">
+  <div class="bar"><h1>Customers</h1>
+    <div class="row nowrap">
+      <form method="get" class="inline"><input name="q" value="{{ q }}" placeholder="Search"><button class="btn ghost small">Search</button></form>
+      <a class="btn" href="{{ url_for('admin_customer_new') }}">Add customer</a>
+    </div>
+  </div>
+  {% if customers %}
+  <table style="width:100%;border-collapse:collapse">
+    <tr><th style="text-align:left">Name</th><th>Email</th><th>Phone</th><th>Active</th></tr>
+    {% for c in customers %}
+    <tr>
+      <td><a href="{{ url_for('admin_customer_edit', cid=c['id']) }}">{{ c['name'] }}</a></td>
+      <td>{{ c['email'] or '—' }}</td>
+      <td>{{ c['phone'] or '—' }}</td>
+      <td>{{ 'yes' if c['is_active'] else 'no' }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% else %}<p class="muted">No customers yet.</p>{% endif %}
+</section>
+{% endblock %}

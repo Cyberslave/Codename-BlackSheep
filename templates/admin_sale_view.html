@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block title %}{{ s['invoice_no'] }} · {{ brand.name }}{% endblock %}
+{% block content %}
+<section class="panel">
+  <div class="bar">
+    <h1>{{ s['invoice_no'] }}</h1>
+    <div class="row nowrap">
+      <a class="btn ghost" href="{{ url_for('admin_sale_invoice', sid=s['id']) }}" target="_blank">Print invoice</a>
+      <a class="btn ghost" href="{{ url_for('admin_sales') }}">Back</a>
+    </div>
+  </div>
+  <p><b>Customer:</b> {{ s['customer_name'] }}</p>
+  <p><b>Date:</b> {{ s['sale_date'] }}{% if s['due_date'] %} · Due {{ s['due_date'] }}{% endif %}</p>
+  <p><b>Status:</b> {{ s['status'] }}</p>
+
+  <h2>Items</h2>
+  <table style="width:100%;border-collapse:collapse">
+    <tr><th style="text-align:left">Description</th><th style="text-align:right">Qty</th><th style="text-align:right">Unit</th><th style="text-align:right">Line</th></tr>
+    {% for it in items %}
+    <tr><td>{{ it['description'] }}</td><td style="text-align:right">{{ it['quantity'] }}</td><td style="text-align:right">{{ it['unit_price_cents']|money }}</td><td style="text-align:right">{{ it['line_total_cents']|money }}</td></tr>
+    {% endfor %}
+  </table>
+
+  <p style="text-align:right;margin-top:1rem">
+    Subtotal: {{ s['subtotal_cents']|money }}<br>
+    Tax: {{ s['tax_cents']|money }}<br>
+    <b>Total: {{ s['total_cents']|money }}</b><br>
+    Paid: {{ s['amount_paid_cents']|money }}<br>
+    <b>Balance: {{ (s['total_cents'] - s['amount_paid_cents'])|money }}</b>
+  </p>
+
+  <h2>Payments</h2>
+  {% if payments %}
+  <table style="width:100%;border-collapse:collapse">
+    <tr><th style="text-align:left">Receipt</th><th>Date</th><th>Method</th><th style="text-align:right">Amount</th><th></th></tr>
+    {% for p in payments %}
+    <tr>
+      <td>{{ p['receipt_no'] }}</td>
+      <td>{{ p['paid_on'] }}</td>
+      <td>{{ p['method'] }}</td>
+      <td style="text-align:right">{{ p['amount_cents']|money }}</td>
+      <td><a href="{{ url_for('admin_sale_receipt', sid=s['id'], pid=p['id']) }}" target="_blank" class="btn ghost small">Print</a></td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% else %}<p class="muted">No payments yet.</p>{% endif %}
+
+  {% if s['total_cents'] > s['amount_paid_cents'] %}
+  <h2>Record payment</h2>
+  <form method="post" action="{{ url_for('admin_sale_payment', sid=s['id']) }}" class="stack">
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+    <div class="grid">
+      <label>Amount <input name="amount" type="number" step="0.01" min="0" required></label>
+      <label>Date <input name="paid_on" type="date" required></label>
+      <label>Method
+        <select name="method">
+          <option>cash</option><option>bank</option><option>mobile</option>
+          <option>cheque</option><option>card</option>
+        </select>
+      </label>
+      <label>Reference <input name="reference"></label>
+    </div>
+    <button class="btn" type="submit">Save payment</button>
+  </form>
+  {% endif %}
+
+  {% if not s['voided_at'] %}
+  <h2 style="margin-top:2rem">Void</h2>
+  <form method="post" action="{{ url_for('admin_sale_void', sid=s['id']) }}">
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+    <input name="reason" placeholder="Reason (required)" required>
+    <button class="btn danger" type="submit">Void sale</button>
+  </form>
+  {% endif %}
+</section>
+{% endblock %}

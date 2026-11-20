@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Products & services · {{ brand.name }}{% endblock %}
+{% block content %}
+<section class="panel">
+  <div class="bar"><h1>Products & services</h1>
+    <a class="btn" href="{{ url_for('admin_product_new') }}">Add product</a>
+  </div>
+  {% if products %}
+  <table style="width:100%;border-collapse:collapse">
+    <tr><th style="text-align:left">Name</th><th>Type</th><th style="text-align:right">Price</th><th>Active</th></tr>
+    {% for p in products %}
+    <tr>
+      <td>{{ p['name'] }}</td>
+      <td>{{ 'Service' if p['is_service'] else 'Product' }}</td>
+      <td style="text-align:right">{{ p['price_cents']|money }}</td>
+      <td>{{ 'yes' if p['is_active'] else 'no' }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% else %}<p class="muted">No products yet.</p>{% endif %}
+</section>
+{% endblock %}

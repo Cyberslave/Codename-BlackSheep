@@ -25,6 +25,10 @@
     {% endif %}
     {% if g.user.is_admin or g.user.level in ('EXE','MGT','ADM') %}
       <a href="{{ url_for('admin_contracts') }}">Contracts</a>
+      <a href="{{ url_for('admin_administrators') }}">Administrators</a>
+      <a href="{{ url_for('admin_expenses') }}">Expenses</a>
+      <a href="{{ url_for('admin_sales') }}">Sales</a>
+      <a href="{{ url_for('admin_business') }}">Business</a>
     {% endif %}
     <a href="{{ url_for('workspace') }}">Workspace</a>
     <a href="{{ url_for('calendar_view') }}">Calendar</a>
@@ -47,5 +51,6 @@
 </main>
 <script src="{{ url_for('static', filename='app.js') }}" defer></script>
 {% block scripts %}{% endblock %}
+<script src="{{ url_for('static', filename='sw-register.js') }}" defer></script>
 </body>
 </html>

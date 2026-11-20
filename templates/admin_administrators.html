@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}Administrators · {{ brand.name }}{% endblock %}
+{% block content %}
+<section class="panel">
+  <div class="bar"><h1>Administrators</h1>
+    <a class="btn" href="{{ url_for('admin_administrators_new') }}">Add administrator</a>
+  </div>
+  <table style="width:100%;border-collapse:collapse">
+    <tr><th style="text-align:left">ID</th><th>Name</th><th>Level</th><th>Email</th><th>Phone</th></tr>
+    {% for a in admins %}
+    <tr>
+      <td><a href="{{ url_for('admin_administrators_view', eid=a['id']) }}">{{ a['id'] }}</a></td>
+      <td>{{ a['full_name'] }}</td>
+      <td>{{ levels.get(a['level'], a['level']) }}</td>
+      <td>{{ a['email'] or '—' }}</td>
+      <td>{{ a['phone'] or '—' }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+</section>
+{% endblock %}

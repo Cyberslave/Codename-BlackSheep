@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block title %}Business · {{ brand.name }}{% endblock %}
+{% block content %}
+<section class="panel">
+  <div class="bar">
+    <h1>Business overview</h1>
+    <div class="row nowrap">
+      <a class="btn ghost" href="{{ url_for('admin_sales') }}">Sales</a>
+      <a class="btn ghost" href="{{ url_for('admin_expenses') }}">Expenses</a>
+      <a class="btn ghost" href="{{ url_for('admin_customers') }}">Customers</a>
+      <a class="btn ghost" href="{{ url_for('admin_business_activity') }}">Activity</a>
+    </div>
+  </div>
+
+  <h2>Revenue and profit</h2>
+  <table style="width:100%;border-collapse:collapse">
+    <tr><th style="text-align:left">Metric</th><th style="text-align:right">This month</th><th style="text-align:right">This year</th></tr>
+    <tr><td>Revenue</td><td style="text-align:right">{{ rev_month|money }}</td><td style="text-align:right">{{ rev_year|money }}</td></tr>
+    <tr><td>Approved expenses</td><td style="text-align:right">{{ exp_month|money }}</td><td style="text-align:right">{{ exp_year|money }}</td></tr>
+    <tr style="border-top:1px solid var(--line);font-weight:700">
+      <td>Profit</td>
+      <td style="text-align:right">{{ profit_month|money }}</td>
+      <td style="text-align:right">{{ profit_year|money }}</td>
+    </tr>
+  </table>
+
+  <h2>Receivables</h2>
+  <p>Outstanding: <b>{{ outstanding|money }}</b> &nbsp; Overdue: <b>{{ overdue|money }}</b></p>
+  <p>Pending expenses awaiting approval: <b>{{ pending_count }}</b> ({{ pending_total|money }})</p>
+
+  <h2>Recent sales</h2>
+  {% if recent_sales %}
+  <table style="width:100%;border-collapse:collapse">
+    <tr><th style="text-align:left">Invoice</th><th>Customer</th><th>Date</th><th style="text-align:right">Total</th><th>Status</th></tr>
+    {% for s in recent_sales %}
+    <tr>
+      <td><a href="{{ url_for('admin_sale_view', sid=s['id']) }}">{{ s['invoice_no'] }}</a></td>
+      <td>{{ s['customer_name'] }}</td>
+      <td>{{ s['sale_date'] }}</td>
+      <td style="text-align:right">{{ s['total_cents']|money }}</td>
+      <td>{{ s['status'] }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% else %}<p class="muted">No sales yet.</p>{% endif %}
+
+  <h2>Recent expenses</h2>
+  {% if recent_expenses %}
+  <table style="width:100%;border-collapse:collapse">
+    <tr><th style="text-align:left">Date</th><th>Category</th><th>Description</th><th style="text-align:right">Amount</th><th>Status</th></tr>
+    {% for e in recent_expenses %}
+    <tr>
+      <td>{{ e['expense_date'] }}</td>
+      <td>{{ e['category_name'] }}</td>
+      <td>{{ e['description'] }}</td>
+      <td style="text-align:right">{{ e['amount_cents']|money }}</td>
+      <td>{{ e['status'] }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% else %}<p class="muted">No expenses yet.</p>{% endif %}
+</section>
+{% endblock %}

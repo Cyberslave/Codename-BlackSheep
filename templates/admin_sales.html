@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}Sales · {{ brand.name }}{% endblock %}
+{% block content %}
+<section class="panel">
+  <div class="bar"><h1>Sales</h1>
+    <div class="row nowrap">
+      <a class="btn ghost" href="{{ url_for('admin_business') }}">Business</a>
+      <a class="btn" href="{{ url_for('admin_sale_new') }}">New sale</a>
+    </div>
+  </div>
+  <form method="get" class="row">
+    <input name="q" value="{{ q }}" placeholder="Search invoice or customer">
+    <select name="status">
+      <option value="">All</option>
+      {% for s in ['sent','part-paid','paid','overdue','draft'] %}
+      <option value="{{ s }}" {{ 'selected' if status == s }}>{{ s }}</option>
+      {% endfor %}
+    </select>
+    <button class="btn ghost">Filter</button>
+  </form>
+  {% if sales %}
+  <table style="width:100%;border-collapse:collapse">
+    <tr><th style="text-align:left">Invoice</th><th>Customer</th><th>Date</th><th style="text-align:right">Total</th><th style="text-align:right">Balance</th><th>Status</th></tr>
+    {% for s in sales %}
+    <tr>
+      <td><a href="{{ url_for('admin_sale_view', sid=s['id']) }}">{{ s['invoice_no'] }}</a></td>
+      <td>{{ s['customer_name'] }}</td>
+      <td>{{ s['sale_date'] }}</td>
+      <td style="text-align:right">{{ s['total_cents']|money }}</td>
+      <td style="text-align:right">{{ (s['total_cents'] - s['amount_paid_cents'])|money }}</td>
+      <td>{{ s['status'] }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% else %}<p class="muted">No sales yet.</p>{% endif %}
+</section>
+{% endblock %}

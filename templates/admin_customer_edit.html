@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}Edit customer · {{ brand.name }}{% endblock %}
+{% block content %}
+<section class="panel narrow">
+  <h1>{{ c['name'] }}</h1>
+  <form method="post" class="stack">
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+    <label>Name <input name="name" value="{{ form['name'] }}" required></label>
+    <label>Email <input type="email" name="email" value="{{ form['email'] or '' }}"></label>
+    <label>Phone <input name="phone" value="{{ form['phone'] or '' }}"></label>
+    <label>Address <textarea name="address" rows="2">{{ form['address'] or '' }}</textarea></label>
+    <label>Tax number <input name="tax_number" value="{{ form['tax_number'] or '' }}"></label>
+    <label>Notes <textarea name="notes" rows="2">{{ form['notes'] or '' }}</textarea></label>
+    <label class="check"><input type="checkbox" name="is_active" value="1" {{ 'checked' if form['is_active'] }}> Active</label>
+    <button class="btn" type="submit">Save</button>
+  </form>
+</section>
+{% endblock %}

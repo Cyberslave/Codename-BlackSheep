@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Business activity · {{ brand.name }}{% endblock %}
+{% block content %}
+<section class="panel">
+  <div class="bar"><h1>Business activity</h1>
+    <a class="btn ghost" href="{{ url_for('admin_business') }}">Back to Business</a>
+  </div>
+  {% if rows %}
+  <table style="width:100%;border-collapse:collapse">
+    <tr><th style="text-align:left">When</th><th>Actor</th><th>Action</th><th>Target</th><th>Detail</th></tr>
+    {% for r in rows %}
+    <tr>
+      <td class="small">{{ r['at']|local }}</td>
+      <td>{{ r['actor'] or '—' }}</td>
+      <td>{{ r['action'] }}</td>
+      <td>{{ r['target'] or '—' }}</td>
+      <td class="small">{{ r['detail'] or '' }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% else %}<p class="muted">No activity yet.</p>{% endif %}
+</section>
+{% endblock %}
