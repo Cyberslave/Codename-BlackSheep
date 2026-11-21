@@ -40,6 +40,7 @@
     <a href="{{ url_for('messages') }}">Messages <span class="badge" id="badge-messages" {% if not nav.messages %}hidden{% endif %}>{{ nav.messages }}</span></a>
     <a href="{{ url_for('notifications') }}">Alerts <span class="badge" id="badge-notifications" {% if not nav.notifications %}hidden{% endif %}>{{ nav.notifications }}</span></a>
     <a href="{{ url_for('settings') }}">Account</a>
+    <a href="{{ url_for('vacancies_list') }}">Vacancies</a>
   </nav>
   <form method="post" action="{{ url_for('logout') }}" class="who">
     <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
