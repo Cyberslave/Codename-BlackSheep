@@ -31,8 +31,8 @@ MAX_PIXELS = 60_000_000
 MIME = {"jpg": "image/jpeg", "png": "image/png", "webp": "image/webp"}
 
 DEFAULT_THEME = {
-    "body_color": "#edf1f3",
-    "navbar_color": "#14272d",
+    "body_color": "#ffffff",
+    "navbar_color": "#000000",
     "navbar_text_color": "#ffffff",
     "button_follow_navbar": "1",
     "button_color": "",          # empty = derive from navbar
