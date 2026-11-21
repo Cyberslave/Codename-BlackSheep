@@ -1028,7 +1028,7 @@ def test_email_command(to):
 # --------------------------------------------------------------------------
 # Branding: company name and logo (administrator)
 # --------------------------------------------------------------------------
-DEFAULT_NAME = "Persman"
+DEFAULT_NAME = "Codename BlackSheep"
 BRANDING_DIR = DATA / "branding"
 BRANDING_DIR.mkdir(parents=True, exist_ok=True)
 MAX_LOGO_BYTES = 2 * 1024 * 1024
