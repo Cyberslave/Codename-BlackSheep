@@ -1049,20 +1049,33 @@ def sniff_logo(data):
 
 
 def get_brand():
-    """Company name and logo for this installation (the default name when none is set)."""
-    if "brand" in g:
-        return g.brand
-    rows = dict(get_db().execute("SELECT key, value FROM app_settings").fetchall())
-    stored = (rows.get("company_name") or "").strip()
-    ext = rows.get("logo_ext") or ""
-    path = BRANDING_DIR / f"logo.{ext}" if ext in LOGO_MIME else None
-    has_logo = bool(path and path.exists())
-    g.brand = {
-        "name": stored or DEFAULT_NAME, "stored_name": stored, "has_logo": has_logo,
-        "logo_ext": ext if has_logo else None, "logo_path": str(path) if has_logo else None,
-        "logo_url": url_for("branding_logo", v=rows.get("logo_version", "0")) if has_logo and has_request_context() else None,
+    """Return the site's brand. The name and logo are hardcoded here so
+    they can never be lost when the database resets on Render.
+
+    An admin can still upload a logo through the Website page — if they do,
+    that uploaded logo wins. Otherwise, the committed static logo is used.
+    """
+    s = settings_dict()
+    uploaded = bool(s.get("logo_ext"))
+    if uploaded:
+        return {
+            "name": s.get("brand_name") or "Codename BlackSheep",
+            "has_logo": True,
+            "logo_url": url_for("branding_logo"),
+        }
+    # No uploaded logo — fall back to the logo committed in the repo
+    static_logo = os.path.join(app.static_folder, "branding", "logo.jpg")
+    if os.path.exists(static_logo):
+        return {
+            "name": s.get("brand_name") or "Codename BlackSheep",
+            "has_logo": True,
+            "logo_url": url_for("static", filename="branding/logo.jpg"),
+        }
+    return {
+        "name": s.get("brand_name") or "Codename BlackSheep",
+        "has_logo": False,
+        "logo_url": "",
     }
-    return g.brand
 
 
 @app.context_processor
