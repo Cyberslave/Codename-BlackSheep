@@ -24,7 +24,13 @@ import exporters
 import mailer
 from app import (DATA, DB_PATH, EMP_DIR, LEVEL_NAMES, LEVELS, UTC_OFFSET, admin_required,
                  app, audit, get_db, iso, local_fmt, login_required, now)
-
+def settings_dict():
+    """Return all app_settings as a dict. Cached per-request via g."""
+    if "site_settings" not in g:
+        g.site_settings = dict(
+            get_db().execute("SELECT key, value FROM app_settings").fetchall()
+        )
+    return g.site_settings
 # --------------------------------------------------------------------------
 # Schema (runs at start-up; safe to run on an existing database)
 # --------------------------------------------------------------------------
