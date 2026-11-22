@@ -100,7 +100,7 @@ def _slug(name):
     return re.sub(r"[^A-Za-z0-9_-]", "", surname) or "employee"
 
 
-def _money(cents, cur="M"):
+def _money(cents, cur="R"):
     whole, frac = divmod(abs(int(cents or 0)), 100)
     return f"{cur}{whole:,}.{frac:02d}"
 
