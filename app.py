@@ -737,6 +737,7 @@ import website   # noqa: E402,F401  (site colours + gallery)
 import contracts  # noqa: E402,F401  (employment contracts)
 import business # noqa: E402,F401 (sales, expenses, admins, letterheaded docs)
 import vacancies  # noqa: E402,F401  (job vacancies and applications)
+import homepage  # noqa: E402,F401  (public landing page)
 
 # ---- FORCE DEFAULTS ON BOOT (temporary) ------------------------------------
 # Run once to overwrite any stale values. Remove after the next deploy.
