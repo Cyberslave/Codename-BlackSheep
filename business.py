@@ -149,7 +149,7 @@ def init_business_db():
 init_business_db()
 
 
-def money(cents, cur="M"):
+def money(cents, cur="R"):
     whole, frac = divmod(abs(int(cents or 0)), 100)
     return f"{'-' if cents < 0 else ''}{cur}{whole:,}.{frac:02d}"
 
