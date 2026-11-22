@@ -1055,33 +1055,34 @@ def sniff_logo(data):
 
 
 def get_brand():
-    """Return the site's brand. The name and logo are hardcoded here so
-    they can never be lost when the database resets on Render.
+    """Always use the committed static logo at static/branding/logo.png.
 
-    An admin can still upload a logo through the Website page — if they do,
-    that uploaded logo wins. Otherwise, the committed static logo is used.
+    Any uploaded logo is ignored — this guarantees the logo never reverts to
+    a placeholder or disappears after a database reset.
     """
-    s = settings_dict()
-    uploaded = bool(s.get("logo_ext"))
-    if uploaded:
-        return {
-            "name": s.get("brand_name") or "Codename BlackSheep",
-            "has_logo": True,
-            "logo_url": url_for("branding_logo"),
-        }
-    # No uploaded logo — fall back to the logo committed in the repo
-    static_logo = os.path.join(app.static_folder, "branding", "logo.jpg")
-    if os.path.exists(static_logo):
-        return {
-            "name": s.get("brand_name") or "Codename BlackSheep",
-            "has_logo": True,
-            "logo_url": url_for("static", filename="branding/logo.jpg"),
-        }
-    return {
-        "name": s.get("brand_name") or "Codename BlackSheep",
-        "has_logo": False,
-        "logo_url": "",
-    }
+    try:
+        s = settings_dict()
+    except Exception:
+        s = {}
+
+    # Hardcoded name — change to your actual company name
+    name = "Codename BlackSheep"
+
+    # Try several common extensions in case the file isn't named logo.png
+    for filename in ("branding/logo.png", "branding/logo.jpg",
+                     "branding/logo.jpeg", "branding/logo.webp"):
+        full_path = os.path.join(app.static_folder, filename)
+        if os.path.exists(full_path):
+            print(f"[BRAND] using static logo at {full_path}", flush=True)
+            return {
+                "name": name,
+                "has_logo": True,
+                "logo_url": url_for("static", filename=filename),
+            }
+
+    # No static logo found. Log which folder we searched so we can diagnose.
+    print(f"[BRAND] no static logo found; searched under {app.static_folder}/branding/", flush=True)
+    return {"name": name, "has_logo": False, "logo_url": ""}
 
 
 @app.context_processor
