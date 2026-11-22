@@ -365,9 +365,18 @@ def too_large(_e):
 # --------------------------------------------------------------------------
 @app.route("/")
 def home():
-    if not g.user:
-        return redirect(url_for("login"))
-    return redirect(url_for("admin_home" if g.user["is_admin"] else "me"))
+    if g.user:
+        return redirect(url_for("admin_home" if g.user["is_admin"] else "me"))
+    # Public landing page
+    db = get_db()
+    photos = db.execute(
+        "SELECT * FROM photos ORDER BY position, id LIMIT 6").fetchall()
+    vacancies = db.execute(
+        "SELECT * FROM vacancies WHERE status='open' "
+        "AND (closes_on IS NULL OR closes_on >= ?) "
+        "ORDER BY created_at DESC LIMIT 3",
+        (now().date().isoformat(),)).fetchall()
+    return render_template("public_home.html", photos=photos, vacancies=vacancies)
 
 
 @app.route("/login", methods=["GET", "POST"])
