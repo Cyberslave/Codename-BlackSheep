@@ -12,6 +12,7 @@
 <body{% if g.user %} data-signed-in="1" data-last-notif="{{ nav.last_notif }}" data-msgs="{{ nav.messages }}"{% endif %} data-page="{% block page %}{% endblock %}">
 <header class="top">
   <a class="brand" href="{{ url_for('home') }}">{% if brand.has_logo %}<img src="{{ brand.logo_url }}" alt="">{% endif %}<span>{{ brand.name }}</span></a>
+
   {% if g.user %}
   <nav aria-label="Main">
     {% if g.user.is_admin %}
@@ -24,29 +25,34 @@
     {% else %}
       <a href="{{ url_for('me') }}">My file</a>
     {% endif %}
+
     {% if g.user.is_admin or g.user.level in ('EXE','MGT','ADM') %}
       <a href="{{ url_for('admin_contracts') }}">Contracts</a>
       <a href="{{ url_for('admin_business') }}">Business</a>
       <a href="{{ url_for('admin_sales') }}">Sales</a>
       <a href="{{ url_for('admin_expenses') }}">Expenses</a>
       <a href="{{ url_for('admin_administrators') }}">Administrators</a>
-      <a href="{{ url_for('admin_administrators') }}">Administrators</a>
-      <a href="{{ url_for('admin_expenses') }}">Expenses</a>
-      <a href="{{ url_for('admin_sales') }}">Sales</a>
-      <a href="{{ url_for('admin_business') }}">Business</a>
     {% endif %}
+
     <a href="{{ url_for('workspace') }}">Workspace</a>
     <a href="{{ url_for('calendar_view') }}">Calendar</a>
     <a href="{{ url_for('messages') }}">Messages <span class="badge" id="badge-messages" {% if not nav.messages %}hidden{% endif %}>{{ nav.messages }}</span></a>
     <a href="{{ url_for('notifications') }}">Alerts <span class="badge" id="badge-notifications" {% if not nav.notifications %}hidden{% endif %}>{{ nav.notifications }}</span></a>
     <a href="{{ url_for('settings') }}">Account</a>
-    <a href="{{ url_for('vacancies_list') }}">Vacancies</a>
   </nav>
   <form method="post" action="{{ url_for('logout') }}" class="who">
     <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
     <span class="idtag lv-{{ g.user.level }}">{{ g.user.id }}</span>
     <button class="btn ghost" type="submit">Sign out</button>
   </form>
+
+  {% else %}
+  <nav aria-label="Main" class="publicnav">
+    <a href="{{ url_for('home') }}">Home</a>
+    <a href="{{ url_for('public_gallery') }}">Gallery</a>
+    <a href="{{ url_for('vacancies_list') }}">Vacancies</a>
+    <a href="{{ url_for('login') }}">Sign in</a>
+  </nav>
   {% endif %}
 </header>
 <main>
