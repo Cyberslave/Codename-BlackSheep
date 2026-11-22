@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}{{ brand.name }}{% endblock %}
+{% block content %}
+
+<section class="hero" style="padding:3rem 1rem;text-align:center;background:var(--ink-navbar);color:var(--ink-navbar-text);border-radius:8px;margin-bottom:2rem">
+  <h1 style="margin:0 0 .5rem 0;font-size:2.2rem">{{ brand.name }}</h1>
+  <p style="margin:0;opacity:.85">Welcome. Browse our work and see current opportunities.</p>
+</section>
+
+{% if vacancies %}
+<section class="panel" style="margin-bottom:1.5rem">
+  <div class="bar" style="display:flex;justify-content:space-between;align-items:center">
+    <h2 style="margin:0">Current vacancies</h2>
+    <a class="btn ghost small" href="{{ url_for('vacancies_list') }}">See all</a>
+  </div>
+  <ul style="list-style:none;padding:0;margin:1rem 0 0 0">
+    {% for v in vacancies %}
+    <li style="padding:.8rem 0;border-bottom:1px solid var(--line)">
+      <a href="{{ url_for('vacancy_detail', vid=v['id']) }}" style="font-size:1.1rem;font-weight:600">{{ v['title'] }}</a>
+      <p class="muted small" style="margin:.3rem 0 0 0">
+        {% if v['department'] %}{{ v['department'] }} ·{% endif %}
+        {% if v['location'] %}{{ v['location'] }} ·{% endif %}
+        {% if v['employment_type'] %}{{ v['employment_type'] }}{% endif %}
+        {% if v['closes_on'] %} · Closes {{ v['closes_on'] }}{% endif %}
+      </p>
+    </li>
+    {% endfor %}
+  </ul>
+</section>
+{% endif %}
+
+{% if photos %}
+<section class="panel" style="margin-bottom:1.5rem">
+  <div class="bar" style="display:flex;justify-content:space-between;align-items:center">
+    <h2 style="margin:0">Gallery</h2>
+    <a class="btn ghost small" href="{{ url_for('public_gallery') }}">View all</a>
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:1rem;margin-top:1rem">
+    {% for p in photos %}
+    <figure style="margin:0">
+      <a href="{{ url_for('photo_file', pid=p['id']) }}" target="_blank">
+        <img src="{{ url_for('photo_file', pid=p['id'], t=1) if p['has_thumb'] else url_for('photo_file', pid=p['id']) }}"
+             alt="{{ p['caption'] or '' }}" style="width:100%;height:150px;object-fit:cover;border-radius:6px">
+      </a>
+      {% if p['caption'] %}<figcaption class="small muted" style="margin-top:.3rem">{{ p['caption'] }}</figcaption>{% endif %}
+    </figure>
+    {% endfor %}
+  </div>
+</section>
+{% endif %}
+
+<section class="panel" style="text-align:center;padding:2rem">
+  <h2>Ready to get started?</h2>
+  <p class="muted">Sign in to manage your records, documents, and workspace.</p>
+  <a class="btn" href="{{ url_for('login') }}">Sign in</a>
+</section>
+
+{% endblock %}
