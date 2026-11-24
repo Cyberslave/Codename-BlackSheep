@@ -215,6 +215,24 @@ def no_store(html):
     return resp
 
 
+def commit_github(message, include_employees=False):
+    """Commit the DB (and optionally employees/) to GitHub so writes survive restarts."""
+    try:
+        from github_commit import commit_data_folder, commit_file
+        ok = commit_data_folder(message)
+        if include_employees and EMP_DIR.exists():
+            for f in EMP_DIR.rglob("*"):
+                if f.is_file():
+                    rel = f.relative_to(DATA).as_posix()
+                    ok &= commit_file(f, f"data/{rel}", f"{message} ({f.name})")
+        if not ok:
+            print(f"[commit_github] partial failure for: {message}", flush=True)
+        return ok
+    except Exception as e:
+        print(f"[commit_github] error: {e}", flush=True)
+        return False
+
+
 # ---- template helpers ----------------------------------------------------
 @app.context_processor
 def inject():
@@ -456,6 +474,7 @@ def change_password():
                        (generate_password_hash(new), g.user["id"]))
             audit(g.user["id"], "password_changed", g.user["id"])
             db.commit()
+            commit_github(f"Password changed: {g.user['id']}")
             flash("Password updated.", "ok")
             return redirect(url_for("home"))
     return render_template("change_password.html")
@@ -485,6 +504,7 @@ def save_document(eid, file, category):
                 path.stat().st_size, iso(now()), g.user["id"]))
     audit(g.user["id"], "document_uploaded", eid, original)
     db.commit()
+    commit_github(f"Document: {original}", include_employees=True)
     flash(f"Uploaded {original}.", "ok")
     return True
 
@@ -512,6 +532,7 @@ def delete_document(doc_id):
     db.execute("DELETE FROM documents WHERE id=?", (doc_id,))
     audit(g.user["id"], "document_deleted", doc["employee_id"], doc["original_name"])
     db.commit()
+    commit_github(f"Document deleted: {doc['original_name']}", include_employees=True)
     flash(f"Deleted {doc['original_name']}.", "ok")
     return redirect(url_for("admin_employee", eid=doc["employee_id"]))
 
@@ -595,6 +616,7 @@ def admin_new():
             (EMP_DIR / eid).mkdir(parents=True, exist_ok=True)
             audit(g.user["id"], "employee_added", eid, f"{f['full_name']} ({LEVEL_NAMES[f['level']]})")
             db.commit()
+            commit_github(f"Employee added: {eid}")
             return no_store(render_template("admin_created.html", emp=get_emp(eid), password=password, reset=False))
         return render_template("admin_new.html", form=f)
     return render_template("admin_new.html", form={})
@@ -625,6 +647,7 @@ def admin_edit(eid):
                    (f["full_name"], f["email"], f["phone"], f["department"], f["job_title"], emp["id"]))
         audit(g.user["id"], "employee_edited", emp["id"])
         db.commit()
+        commit_github(f"Employee edited: {emp['id']}")
         flash("Details saved.", "ok")
     return redirect(url_for("admin_employee", eid=emp["id"]))
 
@@ -649,6 +672,7 @@ def admin_reset(eid):
                "WHERE employee_id=? AND logout_at IS NULL", (iso(now()), emp["id"]))
     audit(g.user["id"], "password_reset", emp["id"])
     db.commit()
+    commit_github(f"Password reset: {emp['id']}")
     return no_store(render_template("admin_created.html", emp=emp, password=password, reset=True))
 
 
@@ -672,6 +696,7 @@ def admin_remove(eid):
     audit(g.user["id"], "employee_removed", emp["id"],
           f"{emp['full_name']} ({LEVEL_NAMES.get(emp['level'], emp['level'])}); files archived")
     db.commit()
+    commit_github(f"Employee removed: {emp['id']}", include_employees=True)
     flash(f"{emp['full_name']} ({emp['id']}) was removed. Their files were moved to the archive.", "ok")
     return redirect(url_for("admin_home"))
 
@@ -719,6 +744,27 @@ def admin_logs_csv():
 
 
 # --------------------------------------------------------------------------
+# Manual save to GitHub
+# --------------------------------------------------------------------------
+@app.post("/admin/save-to-github")
+@admin_required
+def admin_save_to_github():
+    target = request.form.get("next") or request.referrer or url_for("admin_home")
+    if not target.startswith("/"):
+        target = url_for("admin_home")
+    try:
+        from github_commit import commit_data_folder
+        ok = commit_data_folder("Admin: manual save")
+        if ok:
+            flash("Saved to GitHub. Changes will survive restarts.", "ok")
+        else:
+            flash("GitHub commit failed — check the Render logs for details.", "error")
+    except Exception as e:
+        flash(f"GitHub commit error: {e}", "error")
+    return redirect(target)
+
+
+# --------------------------------------------------------------------------
 # CLI: create the first administrator
 #   flask --app app create-admin
 # --------------------------------------------------------------------------
@@ -736,6 +782,7 @@ def create_admin(name, password):
                    "VALUES (?,?,?,?,0,1,?)", (eid, name, ADMIN_LEVEL, generate_password_hash(password), iso(now())))
         (EMP_DIR / eid).mkdir(parents=True, exist_ok=True)
         db.commit()
+        commit_github(f"Admin created: {eid}")
     click.echo(f"Administrator created. Sign in with ID: {eid}")
 
 
