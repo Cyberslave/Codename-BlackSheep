@@ -8,8 +8,8 @@ from flask import (abort, flash, g, redirect, render_template, request,
 from werkzeug.security import generate_password_hash
 
 from app import (ADMIN_LEVEL, EMP_DIR, LEVEL_NAMES, LEVELS, app, audit,
-                 gen_password, get_db, get_emp, iso, new_employee_id, now,
-                 password_problem)
+                 commit_github, gen_password, get_db, get_emp, iso,
+                 new_employee_id, now, password_problem)
 from features import get_brand
 from letterhead import letterhead_html
 
@@ -303,6 +303,7 @@ def admin_administrators_new():
             (EMP_DIR / eid).mkdir(parents=True, exist_ok=True)
             audit(g.user["id"], "admin_created", eid, f["full_name"])
             db.commit()
+            commit_github(f"Admin created: {eid}")
             return render_template("admin_created.html",
                 emp=get_emp(eid), password=password, reset=False)
     return render_template("admin_administrators_new.html",
@@ -337,6 +338,7 @@ def admin_administrators_edit(eid):
                    (f["full_name"], f["email"], f["phone"], level, emp["id"]))
         audit(g.user["id"], "admin_edited", emp["id"], f["full_name"])
         db.commit()
+        commit_github(f"Admin edited: {emp['id']}")
         flash("Administrator updated.", "ok")
     return redirect(url_for("admin_administrators_view", eid=emp["id"]))
 
@@ -359,6 +361,7 @@ def admin_administrators_demote(eid):
                "WHERE employee_id=? AND logout_at IS NULL", (iso(now()), eid))
     audit(g.user["id"], "admin_demoted", eid, emp["full_name"])
     db.commit()
+    commit_github(f"Admin demoted: {eid}")
     flash(f"{emp['full_name']} is no longer an administrator.", "ok")
     return redirect(url_for("admin_administrators"))
 
@@ -394,6 +397,7 @@ def admin_customer_new():
                  f["notes"], iso(now()), g.user["id"]))
             audit(g.user["id"], "customer_created", f["name"])
             db.commit()
+            commit_github(f"Customer added: {f['name']}")
             flash("Customer added.", "ok")
             return redirect(url_for("admin_customers"))
     return render_template("admin_customer_new.html", form={})
@@ -419,6 +423,7 @@ def admin_customer_edit(cid):
                  f["notes"], 1 if request.form.get("is_active") == "1" else 0, cid))
             audit(g.user["id"], "customer_edited", c["name"])
             db.commit()
+            commit_github(f"Customer edited: {c['name']}")
             flash("Customer saved.", "ok")
             return redirect(url_for("admin_customers"))
     return render_template("admin_customer_edit.html", c=c, form=dict(c))
@@ -452,6 +457,7 @@ def admin_product_new():
                 (name, desc, price, 1 if is_service else 0, iso(now()), g.user["id"]))
             audit(g.user["id"], "product_created", name)
             db.commit()
+            commit_github(f"Product added: {name}")
             flash("Product added.", "ok")
             return redirect(url_for("admin_products"))
     return render_template("admin_product_new.html")
@@ -544,6 +550,7 @@ def admin_sale_new():
         audit(g.user["id"], "sale_created", invoice_no,
               f"{cust['name']} — {money(total)}")
         db.commit()
+        commit_github(f"Sale: {invoice_no}")
         flash(f"Sale {invoice_no} created.", "ok")
         return redirect(url_for("admin_sale_view", sid=sid))
     return render_template("admin_sale_new.html",
@@ -607,6 +614,7 @@ def admin_sale_payment(sid):
         audit(g.user["id"], "sale_payment", s["invoice_no"],
               f"{money(amount)} — receipt {receipt}")
         db.commit()
+        commit_github(f"Sale payment: {receipt}")
         flash(f"Payment recorded. Receipt {receipt}.", "ok")
     return redirect(url_for("admin_sale_view", sid=sid))
 
@@ -626,6 +634,7 @@ def admin_sale_void(sid):
                    (iso(now()), reason[:200], sid))
         audit(g.user["id"], "sale_voided", s["invoice_no"], reason[:200])
         db.commit()
+        commit_github(f"Sale voided: {s['invoice_no']}")
         flash("Sale voided.", "ok")
     return redirect(url_for("admin_sale_view", sid=sid))
 
@@ -766,6 +775,7 @@ def admin_expense_new():
                  t, g.user["id"], t if auto else None, g.user["id"] if auto else None))
             audit(g.user["id"], "expense_created", description[:100], money(amount))
             db.commit()
+            commit_github(f"Expense: {description[:60]}")
             flash(f"Expense recorded ({status}).", "ok")
             return redirect(url_for("admin_expenses"))
     return render_template("admin_expense_new.html", categories=categories,
@@ -785,6 +795,7 @@ def admin_expense_approve(eid):
                "WHERE id=?", (iso(now()), g.user["id"], eid))
     audit(g.user["id"], "expense_approved", e["description"][:100], money(e["amount_cents"]))
     db.commit()
+    commit_github(f"Expense approved: {e['id']}")
     flash("Expense approved.", "ok")
     return redirect(url_for("admin_expenses"))
 
@@ -807,6 +818,7 @@ def admin_expense_reject(eid):
                (reason[:200], iso(now()), g.user["id"], eid))
     audit(g.user["id"], "expense_rejected", e["description"][:100], reason[:200])
     db.commit()
+    commit_github(f"Expense rejected: {e['id']}")
     flash("Expense rejected.", "ok")
     return redirect(url_for("admin_expenses"))
 
