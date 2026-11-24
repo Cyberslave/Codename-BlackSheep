@@ -29,7 +29,7 @@ from flask import (abort, flash, g, redirect, render_template, request,
                    send_from_directory, url_for)
 from werkzeug.utils import secure_filename
 
-from app import (DATA, DB_PATH, app, audit, get_db, iso, now)
+from app import (DATA, DB_PATH, app, audit, commit_github, get_db, iso, now)
 
 try:
     from PIL import Image, ImageOps
@@ -220,6 +220,18 @@ def vacancy_apply(vid):
         audit("public", "application_submitted", v["title"],
               f"{f['first_name']} {f['surname']} — app #{aid}")
         db.commit()
+        # --- commit DB + uploaded files so the application survives restarts ---
+        try:
+            from github_commit import commit_file, commit_data_folder
+            commit_data_folder(f"Application: {f['first_name']} {f['surname']}")
+            if app_dir.exists():
+                for f2 in app_dir.iterdir():
+                    if f2.is_file():
+                        rel = f2.relative_to(DATA).as_posix()
+                        commit_file(f2, f"data/{rel}",
+                                    f"Application {aid} — {f2.name}")
+        except Exception as e:
+            print(f"[application] GitHub commit failed: {e}", flush=True)
         flash("Application received. We will be in touch.", "ok")
         return redirect(url_for("vacancy_detail", vid=vid))
     return render_template("vacancy_apply.html", v=v, form={})
@@ -280,6 +292,7 @@ def admin_vacancy_new():
              data["salary_range"], data["closes_on"], iso(now()), g.user["id"]))
         audit(g.user["id"], "vacancy_created", str(cur.lastrowid), data["title"])
         db.commit()
+        commit_github(f"Vacancy created: {data['title']}")
         flash("Vacancy published.", "ok")
         return redirect(url_for("admin_vacancies"))
     return render_template("admin_vacancy_form.html", v={}, is_new=True)
@@ -304,6 +317,7 @@ def admin_vacancy_edit(vid):
              data["closes_on"], vid))
         audit(g.user["id"], "vacancy_edited", str(vid), data["title"])
         db.commit()
+        commit_github(f"Vacancy edited: {data['title']}")
         flash("Vacancy saved.", "ok")
         return redirect(url_for("admin_vacancies"))
     return render_template("admin_vacancy_form.html", v=dict(v), is_new=False, vid=vid)
@@ -317,6 +331,7 @@ def admin_vacancy_close(vid):
     db.execute("UPDATE vacancies SET status='closed' WHERE id=?", (vid,))
     audit(g.user["id"], "vacancy_closed", str(vid), v["title"])
     db.commit()
+    commit_github(f"Vacancy closed: {v['title']}")
     flash("Vacancy closed.", "ok")
     return redirect(url_for("admin_vacancies"))
 
@@ -365,5 +380,6 @@ def admin_application_status(aid):
                (status, iso(now()), g.user["id"], aid))
     audit(g.user["id"], "application_status", str(aid), status)
     db.commit()
+    commit_github(f"Application #{aid} status: {status}")
     flash("Application updated.", "ok")
     return redirect(url_for("admin_application", aid=aid))
