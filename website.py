@@ -258,12 +258,12 @@ def admin_gallery():
             if added:
                 audit(g.user["id"], "photos_added", None, f"{added} photo(s)")
                 db.commit()
+                _commit_to_github(f"Gallery: add {added} photo(s)")
                 flash(f"Added {added} photo{'s' if added != 1 else ''}.", "ok")
             for e in errors:
                 flash(e + ". It was not added.", "error")
         return redirect(url_for("admin_gallery"))
-    return render_template("admin_gallery.html", photos=_photos(),
-                           have_pil=HAVE_PIL, max_photos=MAX_PHOTOS, per_upload=MAX_PER_UPLOAD)
+      return render_template("admin_gallery.html", photos=_photos(),have_pil=HAVE_PIL, max_photos=MAX_PHOTOS, per_upload=MAX_PER_UPLOAD)
 
 
 @app.route("/photos/<int:pid>")
