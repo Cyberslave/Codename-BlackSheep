@@ -19,6 +19,8 @@ try:
     HAVE_PIL = True
 except ImportError:
     HAVE_PIL = False
+
+
 def _commit_to_github(message, include_photos=False):
     """Commit the DB (and optionally data/photos/) to GitHub so writes survive restarts."""
     try:
@@ -27,6 +29,7 @@ def _commit_to_github(message, include_photos=False):
     except Exception as e:
         print(f"[website._commit_to_github] {e}", flush=True)
         return False
+
 
 PHOTO_DIR = DATA / "photos"
 PHOTO_DIR.mkdir(parents=True, exist_ok=True)
@@ -213,6 +216,8 @@ def admin_website():
                 audit(g.user["id"], "branding_changed", None, "; ".join(changed))
             g.pop("theme", None)
             db.commit()
+            if changed:
+                _commit_to_github("Site colours changed")
             flash("Colours saved." if changed else "Nothing changed.", "ok")
             return redirect(url_for("admin_website"))
     count = get_db().execute("SELECT COUNT(*) FROM photos").fetchone()[0]
@@ -263,7 +268,8 @@ def admin_gallery():
             for e in errors:
                 flash(e + ". It was not added.", "error")
         return redirect(url_for("admin_gallery"))
-      return render_template("admin_gallery.html", photos=_photos(),have_pil=HAVE_PIL, max_photos=MAX_PHOTOS, per_upload=MAX_PER_UPLOAD)
+    return render_template("admin_gallery.html", photos=_photos(),
+                           have_pil=HAVE_PIL, max_photos=MAX_PHOTOS, per_upload=MAX_PER_UPLOAD)
 
 
 @app.route("/photos/<int:pid>")
@@ -286,6 +292,7 @@ def photo_caption(pid):
     db.execute("UPDATE photos SET caption=? WHERE id=?",
                (" ".join((request.form.get("caption") or "").split())[:200], pid))
     db.commit()
+    _commit_to_github(f"Gallery: caption for photo {pid}")
     flash("Caption saved.", "ok")
     return redirect(url_for("admin_gallery"))
 
@@ -307,6 +314,7 @@ def photo_move(pid):
         db.execute("UPDATE photos SET position=? WHERE id=?", (other["position"], pid))
         db.execute("UPDATE photos SET position=? WHERE id=?", (row["position"], other["id"]))
         db.commit()
+        _commit_to_github(f"Gallery: reorder photo {pid}")
     return redirect(url_for("admin_gallery"))
 
 
@@ -322,6 +330,7 @@ def photo_delete(pid):
     db.execute("DELETE FROM photos WHERE id=?", (pid,))
     audit(g.user["id"], "photo_deleted", None, f"photo {pid}")
     db.commit()
+    _commit_to_github(f"Gallery: delete photo {pid}")
     flash("Photo deleted.", "ok")
     return redirect(url_for("admin_gallery"))
 
