@@ -19,7 +19,14 @@ try:
     HAVE_PIL = True
 except ImportError:
     HAVE_PIL = False
-
+def _commit_to_github(message, include_photos=False):
+    """Commit the DB (and optionally data/photos/) to GitHub so writes survive restarts."""
+    try:
+        from app import commit_github
+        return commit_github(message, include_employees=include_photos)
+    except Exception as e:
+        print(f"[website._commit_to_github] {e}", flush=True)
+        return False
 
 PHOTO_DIR = DATA / "photos"
 PHOTO_DIR.mkdir(parents=True, exist_ok=True)
