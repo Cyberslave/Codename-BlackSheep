@@ -62,7 +62,9 @@ def _init_db():
       position INTEGER NOT NULL,
       uploaded_at TEXT NOT NULL,
       uploaded_by TEXT
-    )""")
+    ,
+  site_slug TEXT NOT NULL DEFAULT 'holding'
+)""")
     con.commit()
     con.close()
 

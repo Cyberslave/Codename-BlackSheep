@@ -6,7 +6,7 @@
 <meta name="csrf" content="{{ csrf_token() }}">
 <title>{% block title %}{{ brand.name }}{% endblock %}</title>
 <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-<link rel="stylesheet" href="{{ url_for('branding_theme') }}">
+<link rel="stylesheet" href="{% if g.site %}{{ url_for('site_theme_css', slug=g.site['slug']) }}{% else %}{{ url_for('branding_theme') }}{% endif %}">
 {% if brand.has_logo %}<link rel="icon" href="{{ brand.logo_url }}">{% endif %}
 </head>
 <body{% if g.user %} data-signed-in="1" data-last-notif="{{ nav.last_notif }}" data-msgs="{{ nav.messages }}"{% endif %} data-page="{% block page %}{% endblock %}">
@@ -19,7 +19,9 @@
       <a href="{{ url_for('admin_home') }}">Employees</a>
       <a href="{{ url_for('admin_new') }}">Add employee</a>
       <a href="{{ url_for('admin_logs') }}">Activity</a>
-      <a href="{{ url_for('admin_branding') }}">Branding</a>
+      {% if g.user and g.user.is_admin and g.site and g.site['is_holding'] %}
+<a href="{{ url_for('admin_sites') }}">Subsidiaries</a>
+{% endif %}
       <a href="{{ url_for('admin_website') }}">Website</a>
       <a href="{{ url_for('admin_vacancies') }}">Vacancies</a>
     {% else %}

@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}Subsidiaries · {{ brand.name }}{% endblock %}
+{% block content %}
+<section class="panel">
+  <div class="bar">
+    <h1>Subsidiaries</h1>
+    <a class="btn" href="{{ url_for('admin_sites_new') }}">+ Add subsidiary</a>
+  </div>
+  <p class="muted small">Each subsidiary gets its own URL prefix (e.g. /acme/), branding, and user isolation. Only holding-company administrators can manage this list.</p>
+
+  <table style="width:100%;border-collapse:collapse;margin-top:1rem">
+    <tr><th style="text-align:left">Name</th><th>Slug</th><th>Logo</th><th>Theme</th><th>Active</th><th></th></tr>
+    {% for s in sites %}
+    <tr>
+      <td>
+        <strong>{{ s['name'] }}</strong>
+        {% if s['is_holding'] %}<span class="badge" style="background:#0a6b3e;color:#fff;padding:.1rem .4rem;border-radius:4px;font-size:.75rem;margin-left:.3rem">HOLDING</span>{% endif %}
+      </td>
+      <td><code>/{{ s['slug'] }}/</code></td>
+      <td>{% if s['logo_ext'] %}<img src="{{ url_for('site_logo', slug=s['slug']) }}" style="max-height:32px">{% else %}<span class="muted">no logo</span>{% endif %}</td>
+      <td>
+        <span style="display:inline-block;width:16px;height:16px;background:{{ s['body_color'] }};border:1px solid #ccc;border-radius:3px"></span>
+        <span style="display:inline-block;width:16px;height:16px;background:{{ s['navbar_color'] }};border:1px solid #ccc;border-radius:3px"></span>
+      </td>
+      <td>{{ '✓' if s['is_active'] else '✗' }}</td>
+      <td><a class="btn ghost small" href="{{ url_for('admin_sites_edit', slug=s['slug']) }}">Edit</a></td>
+    </tr>
+    {% endfor %}
+  </table>
+</section>
+{% endblock %}

@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Edit' if not is_new else 'New' }} subsidiary · {{ brand.name }}{% endblock %}
+{% block content %}
+<section class="panel narrow">
+  <h1>{{ 'Edit subsidiary' if not is_new else 'Add subsidiary' }}</h1>
+  <form method="post" class="stack">
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+    {% if is_new %}
+    <label>URL slug
+      <input name="slug" value="{{ site.get('slug', '') }}" required pattern="[a-z0-9-]+" placeholder="acme">
+      <span class="muted small">Lowercase letters, numbers, hyphens only. Becomes /acme/</span>
+    </label>
+    {% else %}
+    <label>URL slug <input value="/{{ site['slug'] }}/" disabled></label>
+    {% endif %}
+    <label>Company name <input name="name" value="{{ site.get('name', '') }}" required></label>
+    <label>Tagline <input name="tagline" value="{{ site.get('tagline') or '' }}" placeholder="Short one-liner shown on the homepage"></label>
+
+    <h2>Colours</h2>
+    <div class="grid">
+      <label>Page background <input type="color" name="body_color" value="{{ site.get('body_color') or '#ffffff' }}"></label>
+      <label>Navigation bar <input type="color" name="navbar_color" value="{{ site.get('navbar_color') or '#000000' }}"></label>
+      <label>Navigation text <input type="color" name="navbar_text_color" value="{{ site.get('navbar_text_color') or '#ffffff' }}"></label>
+    </div>
+
+    {% if not is_new %}
+    <label class="check">
+      <input type="checkbox" name="is_active" value="1" {{ 'checked' if site['is_active'] }}>
+      Active (uncheck to hide the site from users)
+    </label>
+    {% endif %}
+
+    <button class="btn" type="submit">{{ 'Save' if not is_new else 'Create subsidiary' }}</button>
+  </form>
+
+  {% if not is_new %}
+  <h2 style="margin-top:2rem">Logo</h2>
+  <form method="post" action="{{ url_for('admin_sites_logo', slug=site['slug']) }}" enctype="multipart/form-data" class="stack">
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+    {% if site['logo_ext'] %}
+    <p><img src="{{ url_for('site_logo', slug=site['slug']) }}" style="max-height:60px"> <span class="muted small">(current logo)</span></p>
+    {% endif %}
+    <label>Upload new logo <input type="file" name="logo" accept=".png,.jpg,.jpeg,.webp,.svg"></label>
+    <button class="btn ghost" type="submit">Upload logo</button>
+  </form>
+  {% endif %}
+</section>
+{% endblock %}

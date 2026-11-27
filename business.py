@@ -63,6 +63,8 @@ CREATE TABLE IF NOT EXISTS customers (
   email TEXT, phone TEXT, address TEXT, tax_number TEXT, notes TEXT,
   is_active INTEGER NOT NULL DEFAULT 1,
   created_at TEXT NOT NULL, created_by TEXT NOT NULL
+,
+  site_slug TEXT NOT NULL DEFAULT 'holding'
 );
 CREATE INDEX IF NOT EXISTS ix_customers_name ON customers(name);
 
@@ -73,6 +75,8 @@ CREATE TABLE IF NOT EXISTS products (
   is_service INTEGER NOT NULL DEFAULT 0,
   is_active INTEGER NOT NULL DEFAULT 1,
   created_at TEXT NOT NULL, created_by TEXT NOT NULL
+,
+  site_slug TEXT NOT NULL DEFAULT 'holding'
 );
 
 CREATE TABLE IF NOT EXISTS sales (
@@ -88,6 +92,8 @@ CREATE TABLE IF NOT EXISTS sales (
   notes TEXT,
   created_at TEXT NOT NULL, created_by TEXT NOT NULL,
   voided_at TEXT, void_reason TEXT
+,
+  site_slug TEXT NOT NULL DEFAULT 'holding'
 );
 CREATE INDEX IF NOT EXISTS ix_sales_customer ON sales(customer_id, sale_date);
 CREATE INDEX IF NOT EXISTS ix_sales_status ON sales(status, sale_date);
@@ -100,6 +106,8 @@ CREATE TABLE IF NOT EXISTS sale_items (
   quantity REAL NOT NULL DEFAULT 1,
   unit_price_cents INTEGER NOT NULL DEFAULT 0,
   line_total_cents INTEGER NOT NULL DEFAULT 0
+,
+  site_slug TEXT NOT NULL DEFAULT 'holding'
 );
 CREATE INDEX IF NOT EXISTS ix_sale_items_sale ON sale_items(sale_id);
 
@@ -111,6 +119,8 @@ CREATE TABLE IF NOT EXISTS sale_payments (
   reference TEXT, note TEXT, receipt_no TEXT,
   created_at TEXT NOT NULL, created_by TEXT NOT NULL,
   voided_at TEXT, void_reason TEXT
+,
+  site_slug TEXT NOT NULL DEFAULT 'holding'
 );
 CREATE INDEX IF NOT EXISTS ix_sale_payments_sale ON sale_payments(sale_id);
 
@@ -127,6 +137,8 @@ CREATE TABLE IF NOT EXISTS expenses (
   status TEXT NOT NULL DEFAULT 'pending', notes TEXT,
   created_at TEXT NOT NULL, created_by TEXT NOT NULL,
   approved_at TEXT, approved_by TEXT, rejected_reason TEXT, voided_at TEXT
+,
+  site_slug TEXT NOT NULL DEFAULT 'holding'
 );
 CREATE INDEX IF NOT EXISTS ix_expenses_status ON expenses(status, expense_date);
 """

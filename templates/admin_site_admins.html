@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}Administrators · {{ site['name'] }}{% endblock %}
+{% block content %}
+<section class="panel">
+  <div class="bar">
+    <h1>Administrators of {{ site['name'] }}</h1>
+    <a class="btn ghost" href="{{ url_for('admin_sites_edit', slug=site['slug']) }}">Back to site settings</a>
+  </div>
+
+  <p class="muted small">
+    These administrators can log in at <code>/{{ site['slug'] }}/login</code>
+    and manage only {{ site['name'] }}'s data.
+    They cannot access other subsidiaries or the holding company.
+  </p>
+
+  <h2>Current administrators</h2>
+  {% if admins %}
+  <table style="width:100%;border-collapse:collapse;margin-top:.5rem">
+    <tr>
+      <th style="text-align:left">ID</th>
+      <th>Name</th>
+      <th>Email</th>
+      <th>Phone</th>
+      <th></th>
+    </tr>
+    {% for a in admins %}
+    <tr>
+      <td><code>{{ a['id'] }}</code></td>
+      <td>{{ a['full_name'] }}</td>
+      <td>{{ a['email'] or '—' }}</td>
+      <td>{{ a['phone'] or '—' }}</td>
+      <td>
+        <form method="post" action="{{ url_for('admin_site_admins_delete', slug=site['slug'], eid=a['id']) }}"
+              onsubmit="return confirm('Delete this administrator? This cannot be undone.')"
+              style="display:inline">
+          <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+          <button class="btn danger small" type="submit">Delete</button>
+        </form>
+      </td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% else %}
+  <p class="muted">No administrators yet for this site.</p>
+  {% endif %}
+
+  <h2 style="margin-top:2rem">Add an administrator</h2>
+  <form method="post" action="{{ url_for('admin_site_admins_new', slug=site['slug']) }}" class="stack">
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+    <label>Full name <input name="full_name" required autofocus></label>
+    <div class="grid">
+      <label>Email <input type="email" name="email" placeholder="optional"></label>
+      <label>Phone <input name="phone" placeholder="optional"></label>
+    </div>
+    <label>Password
+      <input type="password" name="password" required minlength="8" autocomplete="new-password">
+      <span class="muted small">At least 8 characters, with letters and numbers.</span>
+    </label>
+    <button class="btn" type="submit">Create administrator</button>
+    <p class="muted small">
+      You'll see the generated employee ID after saving.
+      Give it, along with the password, to the new administrator.
+      They can change the password after first sign-in.
+    </p>
+  </form>
+</section>
+{% endblock %}

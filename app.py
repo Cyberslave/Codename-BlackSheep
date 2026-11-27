@@ -75,6 +75,16 @@ app.config.update(
     SESSION_COOKIE_SECURE=os.environ.get("PERSMAN_DEV") != "1",
     PERMANENT_SESSION_LIFETIME=dt.timedelta(minutes=SESSION_MINUTES),
 )
+
+@app.route("/_debug/routes")
+def _debug_routes():
+    from flask import current_app
+    rules = []
+    for rule in current_app.url_map.iter_rules():
+        rules.append(f"{rule.rule}  ->  {rule.endpoint}")
+    return "<pre>" + "\n".join(sorted(rules)) + "</pre>"
+
+
 if os.environ.get("PERSMAN_BEHIND_PROXY") == "1":
     app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 
@@ -94,6 +104,7 @@ CREATE TABLE IF NOT EXISTS employees (
   failed_attempts INTEGER NOT NULL DEFAULT 0,
   locked_until TEXT,
   created_at TEXT NOT NULL,
+  site_slug TEXT NOT NULL DEFAULT \'holding\',
   created_by TEXT
 );
 CREATE TABLE IF NOT EXISTS sessions_log (
@@ -104,6 +115,8 @@ CREATE TABLE IF NOT EXISTS sessions_log (
   logout_at TEXT,
   logout_reason TEXT,
   ip TEXT, user_agent TEXT
+,
+  site_slug TEXT NOT NULL DEFAULT 'holding'
 );
 CREATE INDEX IF NOT EXISTS ix_sessions_emp ON sessions_log(employee_id, login_at);
 CREATE TABLE IF NOT EXISTS documents (
@@ -115,11 +128,15 @@ CREATE TABLE IF NOT EXISTS documents (
   size INTEGER NOT NULL,
   uploaded_at TEXT NOT NULL,
   uploaded_by TEXT NOT NULL
+,
+  site_slug TEXT NOT NULL DEFAULT 'holding'
 );
 CREATE TABLE IF NOT EXISTS audit (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   at TEXT NOT NULL, actor TEXT, action TEXT NOT NULL,
   target TEXT, detail TEXT, ip TEXT
+,
+  site_slug TEXT NOT NULL DEFAULT 'holding'
 );
 """
 
@@ -299,7 +316,15 @@ def load_user():
     if not eid:
         return
     db = get_db()
-    emp = db.execute("SELECT * FROM employees WHERE id=?", (eid,)).fetchone()
+    site_slug = getattr(g, "site_slug", "holding") or "holding"
+    emp = db.execute(
+        "SELECT * FROM employees WHERE id=? AND site_slug=?",
+        (eid, site_slug)).fetchone()
+    if emp is None:
+        emp = db.execute(
+            "SELECT e.* FROM employees e "
+            "JOIN sites s ON s.slug=e.site_slug "
+            "WHERE e.id=? AND s.is_holding=1", (eid,)).fetchone()
     log = db.execute("SELECT * FROM sessions_log WHERE id=?", (session.get("log_id"),)).fetchone()
     if emp and log and log["logout_at"] is None and log["employee_id"] == eid:
         g.user = emp
@@ -307,7 +332,6 @@ def load_user():
         db.commit()
     else:
         session.clear()
-
 
 @app.before_request
 def force_password_change():
@@ -381,6 +405,19 @@ def too_large(_e):
 # --------------------------------------------------------------------------
 # Authentication
 # --------------------------------------------------------------------------
+
+# ---- multi-site middleware -----------------------------------------------
+import sites as _sites_module
+
+
+
+
+
+@app.before_request
+def _enforce_site_access():
+    return _sites_module.enforce_site_access()
+
+
 @app.route("/")
 def home():
     if g.user:
@@ -788,6 +825,15 @@ def create_admin(name, password):
 
 # Workspace, calendar, notifications and messaging live in features.py.
 # Imported last because it uses the objects defined above.
+import sites  # noqa: E402,F401  (multi-site detection, isolation, brand)
+
+# ---- Set site context on every request (WSGI middleware already rewrote path) ----
+@app.before_request
+def _set_site_context():
+    from sites import load_site_to_g
+    load_site_to_g()
+
+
 import features  # noqa: E402,F401
 import website   # noqa: E402,F401  (site colours + gallery)
 import contracts  # noqa: E402,F401  (employment contracts)
@@ -795,16 +841,9 @@ import business # noqa: E402,F401 (sales, expenses, admins, letterheaded docs)
 import vacancies  # noqa: E402,F401  (job vacancies and applications)
 import homepage  # noqa: E402,F401  (public landing page)
 
-# ---- FORCE DEFAULTS ON BOOT (temporary) ------------------------------------
-# Run once to overwrite any stale values. Remove after the next deploy.
-with app.app_context():
-    try:
-        db = get_db()
-        db.execute("UPDATE app_settings SET value=? WHERE key='brand_name'", ("Codename BlackSheep",))
-        db.execute("UPDATE app_settings SET value=? WHERE key='body_color'", ("#ffffff",))
-        db.execute("UPDATE app_settings SET value=? WHERE key='navbar_color'", ("#000000",))
-        db.execute("UPDATE app_settings SET value=? WHERE key='navbar_text_color'", ("#ffffff",))
-        db.commit()
-        print("FORCE DEFAULTS: applied")
-    except Exception as e:
-        print(f"FORCE DEFAULTS: skipped ({e})")
+
+# Wrap the app with site-detection middleware (runs BEFORE URL matching)
+from sites import SiteMiddleware
+app.wsgi_app = SiteMiddleware(app.wsgi_app)
+
+

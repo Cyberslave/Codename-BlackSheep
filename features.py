@@ -192,6 +192,10 @@ def nav_counts():
         },
     }
 
+@app.context_processor
+def inject_brand():
+    from sites import get_brand as _sites_brand
+    return {"brand": _sites_brand()}
 
 def person_by_ref(ref):
     row = get_db().execute("SELECT * FROM employees WHERE ref=?", (ref,)).fetchone()
@@ -1055,98 +1059,6 @@ def sniff_logo(data):
 
 
 def get_brand():
-    """Always use the committed static logo at static/branding/logo.png.
-
-    Any uploaded logo is ignored — this guarantees the logo never reverts to
-    a placeholder or disappears after a database reset.
-    """
-    try:
-        s = settings_dict()
-    except Exception:
-        s = {}
-
-    # Hardcoded name — change to your actual company name
-    name = "Codename BlackSheep"
-
-    # Try several common extensions in case the file isn't named logo.png
-    for filename in ("branding/logo.png", "branding/logo.jpg",
-                     "branding/logo.jpeg", "branding/logo.webp"):
-        full_path = os.path.join(app.static_folder, filename)
-        if os.path.exists(full_path):
-            print(f"[BRAND] using static logo at {full_path}", flush=True)
-            return {
-                "name": name,
-                "has_logo": True,
-                "logo_url": url_for("static", filename=filename),
-            }
-
-    # No static logo found. Log which folder we searched so we can diagnose.
-    print(f"[BRAND] no static logo found; searched under {app.static_folder}/branding/", flush=True)
-    return {"name": name, "has_logo": False, "logo_url": ""}
-
-
-@app.context_processor
-def inject_brand():
-    return {"brand": get_brand(), "default_name": DEFAULT_NAME}
-
-
-def _set_setting(db, key, value):
-    if value:
-        db.execute("INSERT OR REPLACE INTO app_settings (key, value) VALUES (?,?)", (key, value))
-    else:
-        db.execute("DELETE FROM app_settings WHERE key=?", (key,))
-
-
-def _remove_logo_files():
-    for p in BRANDING_DIR.glob("logo.*"):
-        p.unlink(missing_ok=True)
-
-
-@app.route("/branding/logo")
-def branding_logo():
-    b = get_brand()
-    if not b["has_logo"]:
-        abort(404)
-    return send_from_directory(BRANDING_DIR, f"logo.{b['logo_ext']}", mimetype=LOGO_MIME[b["logo_ext"]], max_age=86400)
-
-
-@app.route("/admin/branding", methods=["GET", "POST"])
-@admin_required
-def admin_branding():
-    db = get_db()
-    if request.method == "POST":
-        if request.form.get("action") == "remove_logo":
-            _remove_logo_files()
-            _set_setting(db, "logo_ext", "")
-            audit(g.user["id"], "branding_changed", None, "logo removed")
-            db.commit()
-            flash("Logo removed.", "ok")
-            return redirect(url_for("admin_branding"))
-        name = " ".join(re.sub(r"[\x00-\x1f\x7f]", " ", request.form.get("company_name", "")).split())[:80]
-        upload = request.files.get("logo")
-        data, ext = None, None
-        if upload and upload.filename:
-            data = upload.read(MAX_LOGO_BYTES + 1)
-            if len(data) > MAX_LOGO_BYTES:
-                flash("That logo is larger than 2 MB. Please use a smaller image.", "error")
-                return redirect(url_for("admin_branding"))
-            ext = sniff_logo(data)
-            if ext is None:
-                flash("That file is not a supported image. Use a PNG, JPG, GIF or WebP logo.", "error")
-                return redirect(url_for("admin_branding"))
-        changes = []
-        if name != get_brand()["stored_name"]:
-            _set_setting(db, "company_name", name)
-            changes.append("name reset to default" if not name else f"name set to {name}")
-        if data is not None:
-            _remove_logo_files()
-            (BRANDING_DIR / f"logo.{ext}").write_bytes(data)
-            _set_setting(db, "logo_ext", ext)
-            _set_setting(db, "logo_version", str(int(now().timestamp())))
-            changes.append("logo replaced")
-        if changes:
-            audit(g.user["id"], "branding_changed", None, "; ".join(changes))
-        db.commit()
-        flash("Branding saved." if changes else "Nothing changed.", "ok")
-        return redirect(url_for("admin_branding"))
-    return render_template("admin_branding.html")
+    """Delegate to the sites module which returns the current site's brand."""
+    from sites import get_brand as _sites_brand
+    return _sites_brand()

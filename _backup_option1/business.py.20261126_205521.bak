@@ -1,0 +1,855 @@
+"""Persman: sales, expenses, administrators, business dashboard."""
+import datetime as dt
+import re
+from functools import wraps
+
+from flask import (abort, flash, g, redirect, render_template, request,
+                   url_for)
+from werkzeug.security import generate_password_hash
+
+from app import (ADMIN_LEVEL, EMP_DIR, LEVEL_NAMES, LEVELS, app, audit,
+                 commit_github, gen_password, get_db, get_emp, iso,
+                 new_employee_id, now, password_problem)
+from features import get_brand
+from letterhead import letterhead_html
+
+
+BUSINESS_LEVELS = ("EXE", "MGT", "SUP")
+ADMIN_LEVELS = ("EXE", "MGT", "ADM")
+
+
+def _can_business(user):
+    if not user:
+        return False
+    if user["is_admin"]:
+        return True
+    return user["level"] in BUSINESS_LEVELS
+
+
+def _can_manage_admins(user):
+    if not user:
+        return False
+    if user["is_admin"]:
+        return True
+    return user["level"] in ADMIN_LEVELS
+
+
+def business_required(fn):
+    @wraps(fn)
+    def wrapper(*a, **kw):
+        if not g.user:
+            return redirect(url_for("login"))
+        if not _can_business(g.user):
+            abort(403)
+        return fn(*a, **kw)
+    return wrapper
+
+
+def admin_management_required(fn):
+    @wraps(fn)
+    def wrapper(*a, **kw):
+        if not g.user:
+            return redirect(url_for("login"))
+        if not _can_manage_admins(g.user):
+            abort(403)
+        return fn(*a, **kw)
+    return wrapper
+
+
+SCHEMA = """
+CREATE TABLE IF NOT EXISTS customers (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  email TEXT, phone TEXT, address TEXT, tax_number TEXT, notes TEXT,
+  is_active INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL, created_by TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS ix_customers_name ON customers(name);
+
+CREATE TABLE IF NOT EXISTS products (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL, description TEXT,
+  price_cents INTEGER NOT NULL DEFAULT 0,
+  is_service INTEGER NOT NULL DEFAULT 0,
+  is_active INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL, created_by TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS sales (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  invoice_no TEXT NOT NULL UNIQUE,
+  customer_id INTEGER NOT NULL,
+  sale_date TEXT NOT NULL, due_date TEXT,
+  subtotal_cents INTEGER NOT NULL DEFAULT 0,
+  tax_cents INTEGER NOT NULL DEFAULT 0,
+  total_cents INTEGER NOT NULL DEFAULT 0,
+  amount_paid_cents INTEGER NOT NULL DEFAULT 0,
+  status TEXT NOT NULL DEFAULT 'sent',
+  notes TEXT,
+  created_at TEXT NOT NULL, created_by TEXT NOT NULL,
+  voided_at TEXT, void_reason TEXT
+);
+CREATE INDEX IF NOT EXISTS ix_sales_customer ON sales(customer_id, sale_date);
+CREATE INDEX IF NOT EXISTS ix_sales_status ON sales(status, sale_date);
+
+CREATE TABLE IF NOT EXISTS sale_items (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  sale_id INTEGER NOT NULL,
+  product_id INTEGER,
+  description TEXT NOT NULL,
+  quantity REAL NOT NULL DEFAULT 1,
+  unit_price_cents INTEGER NOT NULL DEFAULT 0,
+  line_total_cents INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS ix_sale_items_sale ON sale_items(sale_id);
+
+CREATE TABLE IF NOT EXISTS sale_payments (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  sale_id INTEGER NOT NULL,
+  amount_cents INTEGER NOT NULL,
+  paid_on TEXT NOT NULL, method TEXT NOT NULL,
+  reference TEXT, note TEXT, receipt_no TEXT,
+  created_at TEXT NOT NULL, created_by TEXT NOT NULL,
+  voided_at TEXT, void_reason TEXT
+);
+CREATE INDEX IF NOT EXISTS ix_sale_payments_sale ON sale_payments(sale_id);
+
+CREATE TABLE IF NOT EXISTS expense_categories (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL UNIQUE, is_active INTEGER NOT NULL DEFAULT 1
+);
+
+CREATE TABLE IF NOT EXISTS expenses (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  category_id INTEGER NOT NULL,
+  description TEXT NOT NULL, amount_cents INTEGER NOT NULL,
+  expense_date TEXT NOT NULL, supplier TEXT, reference TEXT,
+  status TEXT NOT NULL DEFAULT 'pending', notes TEXT,
+  created_at TEXT NOT NULL, created_by TEXT NOT NULL,
+  approved_at TEXT, approved_by TEXT, rejected_reason TEXT, voided_at TEXT
+);
+CREATE INDEX IF NOT EXISTS ix_expenses_status ON expenses(status, expense_date);
+"""
+
+
+def init_business_db():
+    import sqlite3
+    from app import DB_PATH
+    con = sqlite3.connect(DB_PATH)
+    con.executescript(SCHEMA)
+    have = con.execute("SELECT COUNT(*) FROM expense_categories").fetchone()[0]
+    if have == 0:
+        for name in ("Rent", "Utilities", "Salaries", "Supplies", "Transport",
+                     "Marketing", "Maintenance", "Other"):
+            con.execute("INSERT OR IGNORE INTO expense_categories (name) VALUES (?)", (name,))
+    con.commit()
+    con.close()
+
+
+init_business_db()
+
+
+def money(cents, cur="R"):
+    whole, frac = divmod(abs(int(cents or 0)), 100)
+    return f"{'-' if cents < 0 else ''}{cur}{whole:,}.{frac:02d}"
+
+
+app.add_template_filter(money, "money")
+
+
+def parse_money(text):
+    cleaned = re.sub(r"[^\d.\-]", "", text or "")
+    if cleaned.count("-") > 1 or ("-" in cleaned and not cleaned.startswith("-")):
+        return None
+    try:
+        d = float(cleaned)
+    except ValueError:
+        return None
+    if abs(d) > 1e9:
+        return None
+    return int(round(d * 100))
+
+
+def parse_date(text):
+    text = (text or "").strip()
+    if not text:
+        return None
+    try:
+        return dt.datetime.strptime(text, "%Y-%m-%d").date()
+    except ValueError:
+        return None
+
+
+def next_invoice_no(db):
+    year = now().year
+    prefix = f"INV-{year}-"
+    row = db.execute(
+        "SELECT invoice_no FROM sales WHERE invoice_no LIKE ? "
+        "ORDER BY id DESC LIMIT 1", (prefix + "%",)).fetchone()
+    n = 1
+    if row:
+        try:
+            n = int(row["invoice_no"].split("-")[-1]) + 1
+        except ValueError:
+            n = 1
+    return f"{prefix}{n:04d}"
+
+
+def next_receipt_no(db, sale_id):
+    year = now().year
+    count = db.execute(
+        "SELECT COUNT(*) FROM sale_payments WHERE sale_id=?", (sale_id,)).fetchone()[0]
+    return f"R{year}-{sale_id:04d}-{count + 1:02d}"
+
+
+@app.route("/admin/business")
+@business_required
+def admin_business():
+    db = get_db()
+    today = now().date()
+    month_start = today.replace(day=1).isoformat()
+    year_start = today.replace(month=1, day=1).isoformat()
+
+    rev_month = db.execute(
+        "SELECT COALESCE(SUM(amount_cents),0) FROM sale_payments "
+        "WHERE voided_at IS NULL AND paid_on>=?", (month_start,)).fetchone()[0]
+    rev_year = db.execute(
+        "SELECT COALESCE(SUM(amount_cents),0) FROM sale_payments "
+        "WHERE voided_at IS NULL AND paid_on>=?", (year_start,)).fetchone()[0]
+    exp_month = db.execute(
+        "SELECT COALESCE(SUM(amount_cents),0) FROM expenses "
+        "WHERE voided_at IS NULL AND status='approved' AND expense_date>=?",
+        (month_start,)).fetchone()[0]
+    exp_year = db.execute(
+        "SELECT COALESCE(SUM(amount_cents),0) FROM expenses "
+        "WHERE voided_at IS NULL AND status='approved' AND expense_date>=?",
+        (year_start,)).fetchone()[0]
+
+    outstanding = db.execute(
+        "SELECT COALESCE(SUM(total_cents - amount_paid_cents),0) FROM sales "
+        "WHERE voided_at IS NULL AND status IN ('sent','part-paid')").fetchone()[0]
+    overdue = db.execute(
+        "SELECT COALESCE(SUM(total_cents - amount_paid_cents),0) FROM sales "
+        "WHERE voided_at IS NULL AND status IN ('sent','part-paid') "
+        "AND due_date IS NOT NULL AND due_date<?", (today.isoformat(),)).fetchone()[0]
+
+    pending = db.execute(
+        "SELECT COUNT(*), COALESCE(SUM(amount_cents),0) FROM expenses "
+        "WHERE voided_at IS NULL AND status='pending'").fetchone()
+
+    recent_sales = db.execute(
+        "SELECT s.*, c.name AS customer_name FROM sales s "
+        "JOIN customers c ON c.id=s.customer_id "
+        "WHERE s.voided_at IS NULL ORDER BY s.created_at DESC LIMIT 10").fetchall()
+    recent_expenses = db.execute(
+        "SELECT e.*, ec.name AS category_name FROM expenses e "
+        "JOIN expense_categories ec ON ec.id=e.category_id "
+        "WHERE e.voided_at IS NULL ORDER BY e.created_at DESC LIMIT 10").fetchall()
+
+    return render_template("business_dashboard.html",
+        rev_month=rev_month, rev_year=rev_year,
+        exp_month=exp_month, exp_year=exp_year,
+        profit_month=rev_month - exp_month, profit_year=rev_year - exp_year,
+        outstanding=outstanding, overdue=overdue,
+        pending_count=pending[0], pending_total=pending[1],
+        recent_sales=recent_sales, recent_expenses=recent_expenses,
+        today=today)
+
+
+@app.route("/admin/business/activity")
+@business_required
+def admin_business_activity():
+    db = get_db()
+    rows = db.execute(
+        "SELECT * FROM audit WHERE action LIKE 'sale_%' OR action LIKE 'expense_%' "
+        "OR action LIKE 'customer_%' OR action LIKE 'product_%' "
+        "OR action LIKE 'admin_%' ORDER BY at DESC LIMIT 300").fetchall()
+    return render_template("business_activity.html", rows=rows)
+
+
+@app.route("/admin/administrators")
+@admin_management_required
+def admin_administrators():
+    db = get_db()
+    admins = db.execute(
+        "SELECT * FROM employees WHERE is_admin=1 OR level=? ORDER BY full_name",
+        (ADMIN_LEVEL,)).fetchall()
+    return render_template("admin_administrators.html", admins=admins,
+                           admin_levels=ADMIN_LEVELS, levels=LEVEL_NAMES)
+
+
+@app.route("/admin/administrators/new", methods=["GET", "POST"])
+@admin_management_required
+def admin_administrators_new():
+    if request.method == "POST":
+        f = {k: request.form.get(k, "").strip() for k in ("full_name", "email", "phone")}
+        level = request.form.get("level", "ADM")
+        if not f["full_name"]:
+            flash("Enter the administrator's full name.", "error")
+        elif level not in ADMIN_LEVELS:
+            flash("Choose a valid administrator level.", "error")
+        elif f["email"] and not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", f["email"]):
+            flash("Enter a valid email address or leave it blank.", "error")
+        else:
+            db = get_db()
+            eid = new_employee_id(db, level)
+            password = gen_password()
+            db.execute(
+                "INSERT INTO employees (id, full_name, email, phone, level, "
+                "password_hash, must_change_password, is_admin, created_at, created_by) "
+                "VALUES (?,?,?,?,?,?,1,1,?,?)",
+                (eid, f["full_name"], f["email"], f["phone"], level,
+                 generate_password_hash(password), iso(now()), g.user["id"]))
+            (EMP_DIR / eid).mkdir(parents=True, exist_ok=True)
+            audit(g.user["id"], "admin_created", eid, f["full_name"])
+            db.commit()
+            commit_github(f"Admin created: {eid}")
+            return render_template("admin_created.html",
+                emp=get_emp(eid), password=password, reset=False)
+    return render_template("admin_administrators_new.html",
+                           admin_levels=ADMIN_LEVELS, levels=LEVEL_NAMES)
+
+
+@app.route("/admin/administrators/<eid>")
+@admin_management_required
+def admin_administrators_view(eid):
+    emp = get_emp(eid)
+    if not (emp["is_admin"] or emp["level"] == ADMIN_LEVEL):
+        abort(404)
+    return render_template("admin_administrators_view.html", emp=emp,
+                           admin_levels=ADMIN_LEVELS, levels=LEVEL_NAMES)
+
+
+@app.post("/admin/administrators/<eid>/edit")
+@admin_management_required
+def admin_administrators_edit(eid):
+    emp = get_emp(eid)
+    if not (emp["is_admin"] or emp["level"] == ADMIN_LEVEL):
+        abort(404)
+    f = {k: request.form.get(k, "").strip() for k in ("full_name", "email", "phone")}
+    level = request.form.get("level", emp["level"])
+    if not f["full_name"]:
+        flash("The name cannot be empty.", "error")
+    elif level not in ADMIN_LEVELS:
+        flash("Invalid level.", "error")
+    else:
+        db = get_db()
+        db.execute("UPDATE employees SET full_name=?, email=?, phone=?, level=? WHERE id=?",
+                   (f["full_name"], f["email"], f["phone"], level, emp["id"]))
+        audit(g.user["id"], "admin_edited", emp["id"], f["full_name"])
+        db.commit()
+        commit_github(f"Admin edited: {emp['id']}")
+        flash("Administrator updated.", "ok")
+    return redirect(url_for("admin_administrators_view", eid=emp["id"]))
+
+
+@app.post("/admin/administrators/<eid>/demote")
+@admin_management_required
+def admin_administrators_demote(eid):
+    emp = get_emp(eid)
+    if not (emp["is_admin"] or emp["level"] == ADMIN_LEVEL):
+        abort(404)
+    if emp["id"] == g.user["id"]:
+        flash("You cannot demote yourself.", "error")
+        return redirect(url_for("admin_administrators_view", eid=eid))
+    db = get_db()
+    if db.execute("SELECT COUNT(*) FROM employees WHERE is_admin=1").fetchone()[0] <= 1:
+        flash("You cannot demote the last administrator.", "error")
+        return redirect(url_for("admin_administrators_view", eid=eid))
+    db.execute("UPDATE employees SET is_admin=0, level='STF' WHERE id=?", (eid,))
+    db.execute("UPDATE sessions_log SET logout_at=?, logout_reason='Demoted' "
+               "WHERE employee_id=? AND logout_at IS NULL", (iso(now()), eid))
+    audit(g.user["id"], "admin_demoted", eid, emp["full_name"])
+    db.commit()
+    commit_github(f"Admin demoted: {eid}")
+    flash(f"{emp['full_name']} is no longer an administrator.", "ok")
+    return redirect(url_for("admin_administrators"))
+
+
+@app.route("/admin/customers")
+@business_required
+def admin_customers():
+    db = get_db()
+    q = request.args.get("q", "").strip()
+    sql, args = "SELECT * FROM customers", []
+    if q:
+        sql += " WHERE name LIKE ? OR email LIKE ? OR phone LIKE ?"
+        args += [f"%{q}%"] * 3
+    sql += " ORDER BY name COLLATE NOCASE"
+    return render_template("admin_customers.html",
+                           customers=db.execute(sql, args).fetchall(), q=q)
+
+
+@app.route("/admin/customers/new", methods=["GET", "POST"])
+@business_required
+def admin_customer_new():
+    if request.method == "POST":
+        f = {k: request.form.get(k, "").strip() for k in
+             ("name", "email", "phone", "address", "tax_number", "notes")}
+        if not f["name"]:
+            flash("Enter the customer name.", "error")
+        else:
+            db = get_db()
+            db.execute(
+                "INSERT INTO customers (name, email, phone, address, tax_number, "
+                "notes, created_at, created_by) VALUES (?,?,?,?,?,?,?,?)",
+                (f["name"], f["email"], f["phone"], f["address"], f["tax_number"],
+                 f["notes"], iso(now()), g.user["id"]))
+            audit(g.user["id"], "customer_created", f["name"])
+            db.commit()
+            commit_github(f"Customer added: {f['name']}")
+            flash("Customer added.", "ok")
+            return redirect(url_for("admin_customers"))
+    return render_template("admin_customer_new.html", form={})
+
+
+@app.route("/admin/customers/<int:cid>/edit", methods=["GET", "POST"])
+@business_required
+def admin_customer_edit(cid):
+    db = get_db()
+    c = db.execute("SELECT * FROM customers WHERE id=?", (cid,)).fetchone()
+    if c is None:
+        abort(404)
+    if request.method == "POST":
+        f = {k: request.form.get(k, "").strip() for k in
+             ("name", "email", "phone", "address", "tax_number", "notes")}
+        if not f["name"]:
+            flash("The name cannot be empty.", "error")
+        else:
+            db.execute(
+                "UPDATE customers SET name=?, email=?, phone=?, address=?, "
+                "tax_number=?, notes=?, is_active=? WHERE id=?",
+                (f["name"], f["email"], f["phone"], f["address"], f["tax_number"],
+                 f["notes"], 1 if request.form.get("is_active") == "1" else 0, cid))
+            audit(g.user["id"], "customer_edited", c["name"])
+            db.commit()
+            commit_github(f"Customer edited: {c['name']}")
+            flash("Customer saved.", "ok")
+            return redirect(url_for("admin_customers"))
+    return render_template("admin_customer_edit.html", c=c, form=dict(c))
+
+
+@app.route("/admin/products")
+@business_required
+def admin_products():
+    rows = get_db().execute(
+        "SELECT * FROM products ORDER BY is_active DESC, name COLLATE NOCASE").fetchall()
+    return render_template("admin_products.html", products=rows)
+
+
+@app.route("/admin/products/new", methods=["GET", "POST"])
+@business_required
+def admin_product_new():
+    if request.method == "POST":
+        name = request.form.get("name", "").strip()
+        price = parse_money(request.form.get("price", "0"))
+        desc = request.form.get("description", "").strip()
+        is_service = request.form.get("is_service") == "1"
+        if not name:
+            flash("Enter a product name.", "error")
+        elif price is None or price < 0:
+            flash("Enter a valid price.", "error")
+        else:
+            db = get_db()
+            db.execute(
+                "INSERT INTO products (name, description, price_cents, is_service, "
+                "created_at, created_by) VALUES (?,?,?,?,?,?)",
+                (name, desc, price, 1 if is_service else 0, iso(now()), g.user["id"]))
+            audit(g.user["id"], "product_created", name)
+            db.commit()
+            commit_github(f"Product added: {name}")
+            flash("Product added.", "ok")
+            return redirect(url_for("admin_products"))
+    return render_template("admin_product_new.html")
+
+
+@app.route("/admin/sales")
+@business_required
+def admin_sales():
+    db = get_db()
+    q = request.args.get("q", "").strip()
+    status = request.args.get("status", "")
+    sql = ("SELECT s.*, c.name AS customer_name FROM sales s "
+           "JOIN customers c ON c.id=s.customer_id WHERE s.voided_at IS NULL")
+    args = []
+    if q:
+        sql += " AND (s.invoice_no LIKE ? OR c.name LIKE ?)"
+        args += [f"%{q}%", f"%{q}%"]
+    if status in ("draft", "sent", "part-paid", "paid", "overdue"):
+        sql += " AND s.status=?"
+        args.append(status)
+    sql += " ORDER BY s.sale_date DESC, s.id DESC LIMIT 500"
+    return render_template("admin_sales.html",
+                           sales=db.execute(sql, args).fetchall(), q=q, status=status)
+
+
+@app.route("/admin/sales/new", methods=["GET", "POST"])
+@business_required
+def admin_sale_new():
+    db = get_db()
+    if request.method == "POST":
+        customer_id = request.form.get("customer_id", type=int)
+        sale_date = parse_date(request.form.get("sale_date", ""))
+        due_date = parse_date(request.form.get("due_date", ""))
+        try:
+            tax_pct = float(request.form.get("tax_rate") or "0")
+            if tax_pct < 0 or tax_pct > 100:
+                raise ValueError
+        except ValueError:
+            flash("Tax rate must be 0–100.", "error")
+            return redirect(url_for("admin_sale_new"))
+        if not customer_id or sale_date is None:
+            flash("Choose a customer and a valid sale date.", "error")
+            return redirect(url_for("admin_sale_new"))
+        cust = db.execute("SELECT * FROM customers WHERE id=?", (customer_id,)).fetchone()
+        if cust is None:
+            flash("Customer not found.", "error")
+            return redirect(url_for("admin_sale_new"))
+        descriptions = request.form.getlist("item_desc[]")
+        quantities = request.form.getlist("item_qty[]")
+        prices = request.form.getlist("item_price[]")
+        items, subtotal = [], 0
+        for d, q, p in zip(descriptions, quantities, prices):
+            d = d.strip()
+            if not d:
+                continue
+            try:
+                qty = float(q or "1")
+                if qty <= 0:
+                    raise ValueError
+            except ValueError:
+                flash("Quantities must be positive numbers.", "error")
+                return redirect(url_for("admin_sale_new"))
+            price = parse_money(p)
+            if price is None or price < 0:
+                flash("Prices must be valid amounts.", "error")
+                return redirect(url_for("admin_sale_new"))
+            line = int(round(qty * price))
+            items.append((d, qty, price, line))
+            subtotal += line
+        if not items:
+            flash("Add at least one item.", "error")
+            return redirect(url_for("admin_sale_new"))
+        tax = int(round(subtotal * tax_pct / 100))
+        total = subtotal + tax
+        invoice_no = next_invoice_no(db)
+        cur = db.execute(
+            "INSERT INTO sales (invoice_no, customer_id, sale_date, due_date, "
+            "subtotal_cents, tax_cents, total_cents, status, notes, created_at, "
+            "created_by) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+            (invoice_no, customer_id, sale_date.isoformat(),
+             due_date.isoformat() if due_date else None, subtotal, tax, total,
+             "sent", request.form.get("notes", "").strip()[:1000],
+             iso(now()), g.user["id"]))
+        sid = cur.lastrowid
+        for d, qty, price, line in items:
+            db.execute(
+                "INSERT INTO sale_items (sale_id, description, quantity, "
+                "unit_price_cents, line_total_cents) VALUES (?,?,?,?,?)",
+                (sid, d[:200], qty, price, line))
+        audit(g.user["id"], "sale_created", invoice_no,
+              f"{cust['name']} — {money(total)}")
+        db.commit()
+        commit_github(f"Sale: {invoice_no}")
+        flash(f"Sale {invoice_no} created.", "ok")
+        return redirect(url_for("admin_sale_view", sid=sid))
+    return render_template("admin_sale_new.html",
+        products=db.execute("SELECT * FROM products WHERE is_active=1 "
+                            "ORDER BY name COLLATE NOCASE").fetchall(),
+        customers=db.execute("SELECT * FROM customers WHERE is_active=1 "
+                             "ORDER BY name COLLATE NOCASE").fetchall(),
+        today=now().date().isoformat())
+
+
+@app.route("/admin/sales/<int:sid>")
+@business_required
+def admin_sale_view(sid):
+    db = get_db()
+    s = db.execute(
+        "SELECT s.*, c.name AS customer_name, c.email AS customer_email, "
+        "c.phone AS customer_phone, c.address AS customer_address "
+        "FROM sales s JOIN customers c ON c.id=s.customer_id WHERE s.id=?",
+        (sid,)).fetchone()
+    if s is None:
+        abort(404)
+    items = db.execute("SELECT * FROM sale_items WHERE sale_id=?", (sid,)).fetchall()
+    payments = db.execute(
+        "SELECT * FROM sale_payments WHERE sale_id=? AND voided_at IS NULL "
+        "ORDER BY paid_on, id", (sid,)).fetchall()
+    return render_template("admin_sale_view.html", s=s, items=items,
+                           payments=payments)
+
+
+@app.post("/admin/sales/<int:sid>/payments")
+@business_required
+def admin_sale_payment(sid):
+    db = get_db()
+    s = db.execute("SELECT * FROM sales WHERE id=?", (sid,)).fetchone()
+    if s is None or s["voided_at"]:
+        abort(404)
+    amount = parse_money(request.form.get("amount"))
+    method = request.form.get("method", "cash")
+    paid_on = parse_date(request.form.get("paid_on", ""))
+    if amount is None or amount <= 0 or paid_on is None:
+        flash("Enter a valid amount and date.", "error")
+    elif paid_on > now().date():
+        flash("Date cannot be in the future.", "error")
+    elif amount > s["total_cents"] - s["amount_paid_cents"]:
+        flash(f"Exceeds outstanding balance of "
+              f"{money(s['total_cents'] - s['amount_paid_cents'])}.", "error")
+    else:
+        receipt = next_receipt_no(db, sid)
+        db.execute(
+            "INSERT INTO sale_payments (sale_id, amount_cents, paid_on, method, "
+            "reference, note, receipt_no, created_at, created_by) "
+            "VALUES (?,?,?,?,?,?,?,?,?)",
+            (sid, amount, paid_on.isoformat(), method[:40],
+             request.form.get("reference", "").strip()[:100],
+             request.form.get("note", "").strip()[:200],
+             receipt, iso(now()), g.user["id"]))
+        new_paid = s["amount_paid_cents"] + amount
+        new_status = "paid" if new_paid >= s["total_cents"] else "part-paid"
+        db.execute("UPDATE sales SET amount_paid_cents=?, status=? WHERE id=?",
+                   (new_paid, new_status, sid))
+        audit(g.user["id"], "sale_payment", s["invoice_no"],
+              f"{money(amount)} — receipt {receipt}")
+        db.commit()
+        commit_github(f"Sale payment: {receipt}")
+        flash(f"Payment recorded. Receipt {receipt}.", "ok")
+    return redirect(url_for("admin_sale_view", sid=sid))
+
+
+@app.post("/admin/sales/<int:sid>/void")
+@business_required
+def admin_sale_void(sid):
+    db = get_db()
+    s = db.execute("SELECT * FROM sales WHERE id=?", (sid,)).fetchone()
+    if s is None or s["voided_at"]:
+        abort(404)
+    reason = request.form.get("reason", "").strip()
+    if not reason:
+        flash("Give a reason.", "error")
+    else:
+        db.execute("UPDATE sales SET voided_at=?, void_reason=? WHERE id=?",
+                   (iso(now()), reason[:200], sid))
+        audit(g.user["id"], "sale_voided", s["invoice_no"], reason[:200])
+        db.commit()
+        commit_github(f"Sale voided: {s['invoice_no']}")
+        flash("Sale voided.", "ok")
+    return redirect(url_for("admin_sale_view", sid=sid))
+
+
+def _invoice_html(sale, items, brand):
+    head = letterhead_html(brand, "Invoice " + sale["invoice_no"])
+    cust = (
+        f"<p><b>Bill to:</b> {sale['customer_name']}</p>"
+        + (f"<p>{sale['customer_address']}</p>" if sale.get("customer_address") else "")
+        + (f"<p>{sale['customer_email']}</p>" if sale.get("customer_email") else "")
+    )
+    rows = "".join(
+        f"<tr><td>{it['description']}</td>"
+        f"<td style='text-align:right'>{it['quantity']}</td>"
+        f"<td style='text-align:right'>{money(it['unit_price_cents'])}</td>"
+        f"<td style='text-align:right'>{money(it['line_total_cents'])}</td></tr>"
+        for it in items
+    )
+    body = (
+        head +
+        f"<h1>Invoice {sale['invoice_no']}</h1>"
+        f"<p><b>Date:</b> {sale['sale_date']}"
+        + (f" &nbsp; <b>Due:</b> {sale['due_date']}" if sale.get("due_date") else "") +
+        "</p>" + cust +
+        "<table style='width:100%;border-collapse:collapse;margin-top:1em'>"
+        "<thead><tr style='border-bottom:1px solid #000'>"
+        "<th style='text-align:left'>Description</th>"
+        "<th style='text-align:right'>Qty</th>"
+        "<th style='text-align:right'>Price</th>"
+        "<th style='text-align:right'>Total</th></tr></thead>"
+        f"<tbody>{rows}</tbody></table>"
+        "<p style='text-align:right;margin-top:1em'>"
+        f"Subtotal: {money(sale['subtotal_cents'])}<br>"
+        f"Tax: {money(sale['tax_cents'])}<br>"
+        f"<b>Total: {money(sale['total_cents'])}</b><br>"
+        f"Paid: {money(sale['amount_paid_cents'])}<br>"
+        f"<b>Balance: {money(sale['total_cents'] - sale['amount_paid_cents'])}</b>"
+        "</p>"
+        + (f"<p><b>Notes:</b> {sale['notes']}</p>" if sale.get("notes") else "")
+    )
+    return body
+
+
+def _receipt_html(sale, payment, brand):
+    head = letterhead_html(brand, "Receipt " + payment["receipt_no"])
+    return (
+        head +
+        f"<h1>Receipt {payment['receipt_no']}</h1>"
+        f"<p><b>Received from:</b> {sale['customer_name']}</p>"
+        f"<p><b>Invoice:</b> {sale['invoice_no']}</p>"
+        f"<p><b>Amount:</b> {money(payment['amount_cents'])}</p>"
+        f"<p><b>Method:</b> {payment['method']}"
+        + (f" &nbsp; <b>Reference:</b> {payment['reference']}" if payment.get("reference") else "") +
+        "</p>"
+        f"<p><b>Date:</b> {payment['paid_on']}</p>"
+        f"<p style='margin-top:2em'>Thank you for your business.</p>"
+    )
+
+
+@app.route("/admin/sales/<int:sid>/invoice")
+@business_required
+def admin_sale_invoice(sid):
+    db = get_db()
+    s = db.execute(
+        "SELECT s.*, c.name AS customer_name, c.email AS customer_email, "
+        "c.phone AS customer_phone, c.address AS customer_address "
+        "FROM sales s JOIN customers c ON c.id=s.customer_id WHERE s.id=?",
+        (sid,)).fetchone()
+    if s is None:
+        abort(404)
+    items = db.execute("SELECT * FROM sale_items WHERE sale_id=?", (sid,)).fetchall()
+    body = _invoice_html(s, items, get_brand())
+    return render_template("sale_document.html",
+                           title="Invoice " + s["invoice_no"], body=body)
+
+
+@app.route("/admin/sales/<int:sid>/receipt/<int:pid>")
+@business_required
+def admin_sale_receipt(sid, pid):
+    db = get_db()
+    s = db.execute(
+        "SELECT s.*, c.name AS customer_name FROM sales s "
+        "JOIN customers c ON c.id=s.customer_id WHERE s.id=?", (sid,)).fetchone()
+    p = db.execute("SELECT * FROM sale_payments WHERE id=? AND sale_id=?",
+                   (pid, sid)).fetchone()
+    if s is None or p is None or p["voided_at"]:
+        abort(404)
+    body = _receipt_html(s, p, get_brand())
+    return render_template("sale_document.html",
+                           title="Receipt " + p["receipt_no"], body=body)
+
+
+@app.route("/admin/expenses")
+@business_required
+def admin_expenses():
+    db = get_db()
+    status = request.args.get("status", "")
+    sql = ("SELECT e.*, ec.name AS category_name, "
+           "(SELECT full_name FROM employees WHERE id=e.created_by) AS creator_name "
+           "FROM expenses e JOIN expense_categories ec ON ec.id=e.category_id "
+           "WHERE e.voided_at IS NULL")
+    args = []
+    if status in ("pending", "approved", "rejected"):
+        sql += " AND e.status=?"
+        args.append(status)
+    sql += " ORDER BY e.expense_date DESC, e.id DESC LIMIT 500"
+    return render_template("admin_expenses.html",
+                           expenses=db.execute(sql, args).fetchall(),
+                           status=status)
+
+
+@app.route("/admin/expenses/new", methods=["GET", "POST"])
+@business_required
+def admin_expense_new():
+    db = get_db()
+    categories = db.execute(
+        "SELECT * FROM expense_categories WHERE is_active=1 ORDER BY name").fetchall()
+    if request.method == "POST":
+        category_id = request.form.get("category_id", type=int)
+        description = request.form.get("description", "").strip()
+        amount = parse_money(request.form.get("amount"))
+        expense_date = parse_date(request.form.get("expense_date", ""))
+        if not category_id or not description or amount is None or amount <= 0 or expense_date is None:
+            flash("Fill in category, description, amount and date.", "error")
+        else:
+            threshold = 50_000
+            auto = (g.user["is_admin"] or g.user["level"] in ("EXE", "MGT")) and amount < threshold
+            status = "approved" if auto else "pending"
+            t = iso(now())
+            db.execute(
+                "INSERT INTO expenses (category_id, description, amount_cents, "
+                "expense_date, supplier, reference, status, notes, created_at, "
+                "created_by, approved_at, approved_by) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+                (category_id, description[:200], amount, expense_date.isoformat(),
+                 request.form.get("supplier", "").strip()[:100],
+                 request.form.get("reference", "").strip()[:100],
+                 status, request.form.get("notes", "").strip()[:500],
+                 t, g.user["id"], t if auto else None, g.user["id"] if auto else None))
+            audit(g.user["id"], "expense_created", description[:100], money(amount))
+            db.commit()
+            commit_github(f"Expense: {description[:60]}")
+            flash(f"Expense recorded ({status}).", "ok")
+            return redirect(url_for("admin_expenses"))
+    return render_template("admin_expense_new.html", categories=categories,
+                           today=now().date().isoformat())
+
+
+@app.post("/admin/expenses/<int:eid>/approve")
+@business_required
+def admin_expense_approve(eid):
+    if not (g.user["is_admin"] or g.user["level"] in ("EXE", "MGT")):
+        abort(403)
+    db = get_db()
+    e = db.execute("SELECT * FROM expenses WHERE id=?", (eid,)).fetchone()
+    if e is None or e["voided_at"]:
+        abort(404)
+    db.execute("UPDATE expenses SET status='approved', approved_at=?, approved_by=? "
+               "WHERE id=?", (iso(now()), g.user["id"], eid))
+    audit(g.user["id"], "expense_approved", e["description"][:100], money(e["amount_cents"]))
+    db.commit()
+    commit_github(f"Expense approved: {e['id']}")
+    flash("Expense approved.", "ok")
+    return redirect(url_for("admin_expenses"))
+
+
+@app.post("/admin/expenses/<int:eid>/reject")
+@business_required
+def admin_expense_reject(eid):
+    if not (g.user["is_admin"] or g.user["level"] in ("EXE", "MGT")):
+        abort(403)
+    reason = request.form.get("reason", "").strip()
+    if not reason:
+        flash("Give a reason for rejection.", "error")
+        return redirect(url_for("admin_expenses"))
+    db = get_db()
+    e = db.execute("SELECT * FROM expenses WHERE id=?", (eid,)).fetchone()
+    if e is None or e["voided_at"]:
+        abort(404)
+    db.execute("UPDATE expenses SET status='rejected', rejected_reason=?, "
+               "approved_at=?, approved_by=? WHERE id=?",
+               (reason[:200], iso(now()), g.user["id"], eid))
+    audit(g.user["id"], "expense_rejected", e["description"][:100], reason[:200])
+    db.commit()
+    commit_github(f"Expense rejected: {e['id']}")
+    flash("Expense rejected.", "ok")
+    return redirect(url_for("admin_expenses"))
+
+
+@app.route("/admin/expenses/<int:eid>/sheet")
+@business_required
+def admin_expense_sheet(eid):
+    db = get_db()
+    e = db.execute(
+        "SELECT e.*, ec.name AS category_name, "
+        "(SELECT full_name FROM employees WHERE id=e.created_by) AS creator_name, "
+        "(SELECT full_name FROM employees WHERE id=e.approved_by) AS approver_name "
+        "FROM expenses e JOIN expense_categories ec ON ec.id=e.category_id "
+        "WHERE e.id=?", (eid,)).fetchone()
+    if e is None or e["voided_at"]:
+        abort(404)
+    head = letterhead_html(get_brand(), "Expense Approval Sheet")
+    body = (
+        head +
+        f"<h1>Expense approval sheet</h1>"
+        f"<p><b>Date:</b> {e['expense_date']}</p>"
+        f"<p><b>Category:</b> {e['category_name']}</p>"
+        f"<p><b>Description:</b> {e['description']}</p>"
+        f"<p><b>Amount:</b> {money(e['amount_cents'])}</p>"
+        + (f"<p><b>Supplier:</b> {e['supplier']}</p>" if e.get("supplier") else "")
+        + (f"<p><b>Reference:</b> {e['reference']}</p>" if e.get("reference") else "")
+        + f"<p><b>Recorded by:</b> {e['creator_name'] or e['created_by']}</p>"
+        + f"<p><b>Status:</b> {e['status']}</p>"
+        + (f"<p><b>Approved by:</b> {e['approver_name'] or e['approved_by']} "
+           f"on {e['approved_at']}</p>" if e["status"] == "approved" else "")
+        + (f"<p><b>Rejection reason:</b> {e['rejected_reason']}</p>"
+           if e["status"] == "rejected" else "")
+    )
+    return render_template("sale_document.html", title="Expense sheet", body=body)

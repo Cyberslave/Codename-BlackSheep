@@ -82,6 +82,8 @@ CREATE TABLE IF NOT EXISTS vacancies (
   status TEXT NOT NULL DEFAULT 'open',
   created_at TEXT NOT NULL,
   created_by TEXT NOT NULL
+,
+  site_slug TEXT NOT NULL DEFAULT 'holding'
 );
 CREATE INDEX IF NOT EXISTS ix_vacancies_status ON vacancies(status, created_at);
 
@@ -101,6 +103,8 @@ CREATE TABLE IF NOT EXISTS applications (
   created_at TEXT NOT NULL,
   handled_at TEXT,
   handled_by TEXT
+,
+  site_slug TEXT NOT NULL DEFAULT 'holding'
 );
 CREATE INDEX IF NOT EXISTS ix_applications_vacancy ON applications(vacancy_id, created_at);
 """
